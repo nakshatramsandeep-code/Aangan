@@ -43,7 +43,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             </div>
           </div>
           <div className="blob rise d1">
-            <div className="orb" /><div className="orb b" />
+            <div className="orb" aria-hidden="true" /><div className="orb b" aria-hidden="true" />
             <div className="glass-stack">
               <Glass v={`${m.answeredIn5Pct}%`} l="Answered within 5 minutes" n="Baseline: 52% answered within 48 hours" />
               <Glass v={`${m.qualifiedPct}%`} l="Qualified" n={`${m.qualifiedN} ${m.qualifiedN === 1 ? 'lead' : 'leads'} handed to designers`} />
