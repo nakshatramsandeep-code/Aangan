@@ -25,7 +25,8 @@ export function splitTranscript(t: string) {
   const caller: string[] = [];
   let side: 'agent' | 'caller' | null = null;
   for (const raw of t.split(/\r?\n/)) {
-    const line = raw.trim();
+    // Vaani prefixes each line with a time, e.g. "[16:30:45] AGENT: ..."
+    const line = raw.trim().replace(/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*/, '');
     if (!line) continue;
     if (AGENT_LABEL.test(line)) side = 'agent';
     else if (CALLER_LABEL.test(line)) side = 'caller';
