@@ -11,3 +11,4 @@ scratch-*.ts
 
 .vercel
 .env*
+vaani-agent-prompt.txt

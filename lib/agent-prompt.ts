@@ -23,9 +23,14 @@ Short sentences. Indian English is fine. Mirror the caller's language if they sp
 ${knowledge.services()}
 
 # Qualifying rubric: qualified.md (the founder's own words)
-${knowledge.qualified()}
+${noFigures(knowledge.qualified())}
 `;
 }
+
+/** The rubric's examples quote rupee figures. The agent must never say a number, so it never sees them. */
+const noFigures = (md: string) =>
+  md.replace(/₹\s?[\d.,–-]+\s*(lakhs?|lacs?|crores?)?/gi, 'a figure far too small');
+
 
 /** Vaani cannot call our server mid-call (no custom tools documented), so the rules live in the prompt. */
 const STANDALONE_JOBS = `# Your job on every call
