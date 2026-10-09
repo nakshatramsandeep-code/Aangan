@@ -75,5 +75,7 @@ export interface CallRow {
   voice_cost_inr?: number;
   ai_cost_inr?: number;
   ai_tokens?: { input: number; output: number };
+  /** The caller never spoke (silent line, dropped call, browser test). Logged and costed, but not triaged or counted. */
+  silent?: boolean;
   simulated?: boolean;
 }

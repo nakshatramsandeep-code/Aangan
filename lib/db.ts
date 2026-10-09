@@ -23,7 +23,11 @@ function ensure() {
            data jsonb not null
          )`,
       )
-      .then(() => undefined);
+      .then(() => undefined)
+      .catch((e) => {
+        ready = null; // do not cache a failure: the next request retries
+        throw e;
+      });
   }
   return ready;
 }

@@ -66,39 +66,55 @@ export async function qualify(i: Ident & { answers?: Record<string, string>; tra
   return { ...decision, criteria: t.criteria, fields: row.fields };
 }
 
+const isQualified = (r?: string) => r === 'qualified' || r === 'qualified_flag';
+
+/** Fully handled: nothing left to retry. Vaani redelivers webhooks, and a redelivery must not cost another Gemini call or a second deal. */
+const settled = (r: CallRow) =>
+  r.status === 'ended' && !!r.route !== !!r.silent && (r.silent || (!!r.alert?.sent && (!isQualified(r.route) || !!r.hubspot?.deal_id)));
+
 /** /call-ended: log everything, then fan out to Telegram and HubSpot. Safe to call twice. */
 export async function callEnded(
   i: Ident & { answers?: Record<string, string>; transcript?: string; durationSec: number; answeredInSec?: number },
 ) {
   const row = await loadOrCreate(i);
+  if (settled(row)) return row;
+
   row.caller_number ||= i.callerNumber;
   row.status = 'ended';
   row.duration_sec = i.durationSec;
   row.answered_in_sec = i.answeredInSec;
   row.answers = { ...row.answers, ...i.answers };
-  if (i.transcript) {
-    row.transcript = i.transcript;
-    const { agent } = splitTranscript(i.transcript);
-    const leaks = detectPriceLeak(agent);
-    row.price_leak = leaks.length ? leaks : undefined;
-  }
   const v = voiceCostInr(i.durationSec);
   row.voice_minutes = v.minutes;
   row.voice_cost_inr = v.inr;
 
-  // The full transcript is the final word; it overrides whatever was decided mid-call.
-  if (i.transcript || Object.keys(row.answers ?? {}).length) {
-    const t = await triage({ answers: row.answers, transcript: i.transcript, asOf: new Date(row.created_at) });
-    apply(row, t, decideRoute(t));
-  } else {
-    row.route ??= 'ask_question';
+  const split = i.transcript ? splitTranscript(i.transcript) : null;
+  if (i.transcript) {
+    row.transcript = i.transcript;
+    const leaks = detectPriceLeak(split!.agent);
+    row.price_leak = leaks.length ? leaks : undefined;
   }
+
+  // A call where the caller never spoke is logged and costed, but not triaged, alerted or counted.
+  const callerSaid = split?.labelled ? split.caller.join(' ').replace(/\W/g, '').length : Object.keys(row.answers ?? {}).length ? 99 : 0;
+  if (callerSaid < 3) {
+    row.silent = true;
+    row.route = undefined;
+    row.summary = 'No conversation: the caller did not speak.';
+    row.flags = [];
+    await saveCall(row);
+    return row;
+  }
+  row.silent = false;
+
+  // The full transcript is the final word; it overrides whatever was decided mid-call.
+  const t = await triage({ answers: row.answers, transcript: i.transcript, asOf: new Date(row.created_at) });
+  apply(row, t, decideRoute(t));
   await saveCall(row);
 
-  // A call too short to have said anything (dropped line) is logged but not sent to a designer.
-  const hasContent = !!(i.transcript || Object.keys(row.answers ?? {}).length) && (row.fields?.name || row.fields?.scope || row.route === 'escalate' || row.fields?.locality);
-  const wantsHubspot = (row.route === 'qualified' || row.route === 'qualified_flag') && !row.hubspot?.deal_id;
-  const wantsAlert = hasContent && !row.alert?.sent;
+  // Every call where the caller spoke reaches a designer, whatever Gemini managed to extract.
+  const wantsHubspot = isQualified(row.route) && !row.hubspot?.deal_id;
+  const wantsAlert = !row.alert?.sent;
 
   const [alert, lead] = await Promise.allSettled([
     wantsAlert ? sendHandoff(row) : Promise.resolve(undefined),

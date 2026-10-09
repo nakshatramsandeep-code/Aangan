@@ -36,7 +36,7 @@ export default function Simulator({ fixtures }: { fixtures: Fixture[] }) {
   }
 
   return (
-    <div className="card">
+    <div className="card card-pad">
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
         <select onChange={(e) => setText(usable.find((f) => f.id === e.target.value)?.transcript ?? '')} defaultValue={usable[0]?.id}>
           {usable.map((f) => <option key={f.id} value={f.id}>{f.id} · {f.date} {f.time} · expected {f.expected}</option>)}

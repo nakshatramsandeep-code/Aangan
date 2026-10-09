@@ -1,13 +1,18 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Icon } from './Icons';
 
-/** The only chrome: a thin bar with the product name and an optional right-hand note. */
-export function Topbar({ right }: { right?: ReactNode }) {
+/** Sticky bar: brand on the left, whatever the page needs on the right. */
+export function Topbar({ children }: { children?: ReactNode }) {
   return (
     <header className="topbar">
       <div className="topbar-in">
-        <Link href="/" className="brand">Aangan Studio <span>Phone enquiries</span></Link>
-        {right && <div className="topbar-right">{right}</div>}
+        <Link href="/" className="brand" aria-label="Aangan phone desk, home">
+          <span className="mark"><Icon name="arch" size={18} /></span>
+          <span className="brand-name">Aangan</span>
+          <span className="brand-sub">Phone desk</span>
+        </Link>
+        <div className="topbar-right">{children}</div>
       </div>
     </header>
   );

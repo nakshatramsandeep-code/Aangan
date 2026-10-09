@@ -16,7 +16,8 @@ export async function createLead(call: CallRow): Promise<NonNullable<CallRow['hu
     return { contact_id: `mock-contact-${call.id}`, deal_id: `mock-deal-${call.id}`, mock: true };
   }
   const f = call.fields ?? {};
-  const phone = call.caller_number;
+  // Browser test calls carry a label like "web-user" instead of a number; do not store that as a phone.
+  const phone = /^\+?[\d\s()-]{8,}$/.test(call.caller_number ?? '') ? call.caller_number : undefined;
   const [first, ...rest] = (f.name || 'Unknown caller').split(' ');
 
   let contactId: string | undefined;

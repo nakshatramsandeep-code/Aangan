@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { config } from './config';
 
 /**
@@ -23,7 +24,8 @@ export function authorised(req: Request): boolean {
     req.headers.get('x-webhook-secret') ??
     req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
     '';
-  return given === config.webhookSecret;
+  const a = Buffer.from(given), b = Buffer.from(config.webhookSecret);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 /** Transcript may arrive as a string or as an array of {role|speaker, text|content|message}. */

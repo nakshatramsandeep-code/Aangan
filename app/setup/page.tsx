@@ -22,7 +22,7 @@ export default async function Setup() {
       <div className="container">
         <Link href="/" className="back">← Dashboard</Link>
         <div className="page-title"><div><h1>Setup</h1><p className="meta">Each integration goes from mock to live once its keys are in the environment.</p></div></div>
-      <div className="card">
+      <div className="card card-pad">
         <Row name="Neon" ok={s.neon} need="DATABASE_URL" />
         <Row name="Gemini Flash" ok={s.gemini} need="GEMINI_API_KEY (rule-based triage until then)" />
         <Row name="HubSpot" ok={s.hubspot} need="HUBSPOT_TOKEN" />
@@ -30,8 +30,8 @@ export default async function Setup() {
         <Row name="Vaani webhook secret" ok={s.vaaniSecret} need="VAANI_WEBHOOK_SECRET (the webhook is open in dev, closed in production without it)" />
       </div>
 
-      <h2>Vaani dashboard checklist</h2>
-      <div className="card">
+      <h2 className="section">Vaani dashboard checklist</h2>
+      <div className="card card-pad">
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           <li><b>Create the agent</b>: paste the prompt below, pick an Indian English voice, language English (or Hindi if you want).</li>
           <li><b>Telephony</b>: Settings → Telephony → Provision a Number (or connect a SIP trunk), and assign it to the agent. This is the studio's AI line.</li>
@@ -48,9 +48,9 @@ export default async function Setup() {
         </p>
       </div>
 
-      <h2>Last Vaani webhook payloads</h2>
+      <h2 className="section">Last Vaani webhook payloads</h2>
       <p className="meta" style={{ margin: "0 0 10px" }}>The docs do not list every field. The first real call shows exactly what Vaani sends, and <code>lib/vaani.ts</code> is the only file to adjust.</p>
-      <div className="card">
+      <div className="card card-pad">
         {events.length === 0 && <span className="dim">Nothing received yet.</span>}
         {events.map((e, i) => (
           <details key={i} style={{ margin: '4px 0' }}>
@@ -62,7 +62,7 @@ export default async function Setup() {
         ))}
       </div>
 
-      <h2>Agent prompt for Vaani</h2>
+      <h2 className="section">Agent prompt for Vaani</h2>
       <p className="meta" style={{ margin: "0 0 10px" }}>Built from services.md, qualified.md and never-say.md. pricing.md's numbers are never included, so the agent cannot repeat them.</p>
       <pre className="prompt">{buildAgentPrompt('standalone')}</pre>
       </div>
