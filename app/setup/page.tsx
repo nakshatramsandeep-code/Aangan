@@ -1,5 +1,5 @@
-import { Shout } from '@/components/Header';
-import { PageHero } from '@/components/Hero';
+import Link from 'next/link';
+import { Topbar } from '@/components/Topbar';
 import { buildAgentPrompt } from '@/lib/agent-prompt';
 import { config, integrationStatus } from '@/lib/config';
 import { listEvents } from '@/lib/db';
@@ -18,12 +18,10 @@ export default async function Setup() {
   const events = await listEvents(8);
   return (
     <>
-      <Shout>
-        <PageHero kicker="Connections" title="Setup">
-          Each integration switches from mock to live as soon as its keys are in the environment. Nothing else changes.
-        </PageHero>
-      </Shout>
-      <div className="wrap">
+      <Topbar />
+      <div className="container">
+        <Link href="/" className="back">← Dashboard</Link>
+        <div className="page-title"><div><h1>Setup</h1><p className="meta">Each integration goes from mock to live once its keys are in the environment.</p></div></div>
       <div className="card">
         <Row name="Neon" ok={s.neon} need="DATABASE_URL" />
         <Row name="Gemini Flash" ok={s.gemini} need="GEMINI_API_KEY (rule-based triage until then)" />
@@ -40,18 +38,18 @@ export default async function Setup() {
           <li>
             <b>Webhook</b>: Settings → Webhooks → add this URL:
             <div style={{ margin: '6px 0' }}><code>{base}/api/vaani/webhook?secret=&lt;VAANI_WEBHOOK_SECRET&gt;</code></div>
-            {local && <div className="bad" style={{ fontSize: 13 }}>This is a local address. Vaani cannot reach it. Deploy to Vercel (or use a tunnel such as ngrok) and set <code>APP_URL</code> first.</div>}
+            {local && <div className="bad small">This is a local address. Vaani cannot reach it. Deploy to Vercel (or use a tunnel such as ngrok) and set <code>APP_URL</code> first.</div>}
           </li>
           <li><b>Test</b>: call the number, then check this page: the raw payload appears below and the call lands on the dashboard and in Telegram.</li>
         </ol>
-        <p className="dim" style={{ fontSize: 13, margin: '10px 0 0' }}>
+        <p className="foot">
           Vaani sends <code>call_postprocessing</code> (transcript, summary, duration) after each call. That event runs triage, the log row, the Telegram handoff and the HubSpot deal.
           Vaani documents no webhook signature, so the secret travels in the URL.
         </p>
       </div>
 
       <h2>Last Vaani webhook payloads</h2>
-      <p className="sub">The docs do not list every field. The first real call shows exactly what Vaani sends, and <code>lib/vaani.ts</code> is the only file to adjust.</p>
+      <p className="meta" style={{ margin: "0 0 10px" }}>The docs do not list every field. The first real call shows exactly what Vaani sends, and <code>lib/vaani.ts</code> is the only file to adjust.</p>
       <div className="card">
         {events.length === 0 && <span className="dim">Nothing received yet.</span>}
         {events.map((e, i) => (
@@ -65,7 +63,7 @@ export default async function Setup() {
       </div>
 
       <h2>Agent prompt for Vaani</h2>
-      <p className="sub">Built from services.md, qualified.md and never-say.md. pricing.md's numbers are never included, so the agent cannot repeat them.</p>
+      <p className="meta" style={{ margin: "0 0 10px" }}>Built from services.md, qualified.md and never-say.md. pricing.md's numbers are never included, so the agent cannot repeat them.</p>
       <pre className="prompt">{buildAgentPrompt('standalone')}</pre>
       </div>
     </>

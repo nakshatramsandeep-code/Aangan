@@ -103,7 +103,7 @@ Return, for each of the five criteria, status "pass", "fail" or "unclear" and a 
 - budget: ONLY judge a number the caller volunteered. If no budget was mentioned, status is "pass" with note "Not mentioned, treated as qualified". "fail" only if a volunteered number is clearly below what any project of the described scope would cost (the owner's floor for any real project is about ${config.rules.budgetFloorLakh} lakh). Never use "unclear" for a missing budget.
 - decision_maker: "pass" if the caller is the decider or is authorised by them, or if it was simply not discussed. "unclear" if the caller is only researching on behalf of someone else without confirmed authority.
 Set complaint=true if the caller is complaining about an existing project, says someone promised to get back to them and did not, says an earlier message or enquiry was ignored or lost, or is clearly upset or frustrated with the studio. When in doubt, complaint=true: a human should hear about it.
-Extract fields only from the caller's own words. summary: two plain sentences a designer can read in five seconds.
+Extract fields only from the caller's own words, as short plain values with no commentary: scope is the rooms or work in at most 12 words (for example "kitchen, wardrobes, living room"); completion_date is a few words ("by March 2027"); decision_maker is a few words ("caller and spouse"); locality is just the area name. Leave a field out if the caller did not say it. summary: two plain sentences a designer can read in five seconds.
 
 === services.md ===
 ${knowledge.services()}
@@ -112,10 +112,33 @@ ${knowledge.services()}
 ${knowledge.qualified()}`;
 }
 
+/** Gemini's free-text fields sometimes ramble. Designers read these in a Telegram note, so cap them in code. */
+function tidyFields(f: Fields): Fields {
+  const cap = (v: string | undefined, max: number) => {
+    if (!v) return v;
+    const t = v.replace(/\s+/g, ' ').trim();
+    if (t.length <= max) return t;
+    const cut = t.slice(0, max);
+    const at = Math.max(cut.lastIndexOf(','), cut.lastIndexOf(';'), cut.lastIndexOf('.'));
+    return (at > max * 0.4 ? cut.slice(0, at) : cut.slice(0, cut.lastIndexOf(' '))).trim();
+  };
+  return {
+    ...f,
+    name: cap(f.name, 40),
+    locality: cap(f.locality, 30),
+    scope: cap(f.scope, 90),
+    completion_date: cap(f.completion_date, 40),
+    decision_maker: cap(f.decision_maker, 40),
+    budget_mentioned: cap(f.budget_mentioned, 40),
+  };
+}
+
 async function gemini(input: TriageInput): Promise<TriageResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.gemini.model}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
+    // A slow reply must not stall the webhook: after 25s we fall back to the rule-based triage.
+    signal: AbortSignal.timeout(25_000),
     headers: { 'content-type': 'application/json', 'x-goog-api-key': config.gemini.key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt(input.asOf) }] },
@@ -133,7 +156,7 @@ async function gemini(input: TriageInput): Promise<TriageResult> {
   if (!text) throw new Error('Gemini returned no content');
   const out = JSON.parse(text);
   return {
-    fields: out.fields ?? {},
+    fields: tidyFields(out.fields ?? {}),
     criteria: out.criteria,
     complaint: !!out.complaint || COMPLAINT_RE.test(callerText(input).replace(/[’‘]/g, "'").toLowerCase()),
     summary: out.summary ?? '',
@@ -256,7 +279,13 @@ function heuristic(input: TriageInput): TriageResult {
 export async function triage(input: TriageInput): Promise<TriageResult> {
   if (config.gemini.key) {
     try {
-      return await gemini(input);
+      const g = await gemini(input);
+      // Gemini sometimes omits facts the caller plainly stated. Fill gaps from the rule-based reading.
+      const h = heuristic(input).fields;
+      for (const k of ['name', 'locality', 'area_sqft', 'project_type'] as const) {
+        if (g.fields[k] == null || g.fields[k] === '') (g.fields as Record<string, unknown>)[k] = h[k];
+      }
+      return g;
     } catch (e) {
       console.error('[triage] Gemini failed, using rule-based fallback:', e);
     }
