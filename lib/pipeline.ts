@@ -44,6 +44,14 @@ function apply(row: CallRow, t: TriageResult, d: RouteDecision) {
   row.ai_cost_inr = aiCostInr(row.ai_tokens.input, row.ai_tokens.output);
 }
 
+/** call_started: remember who is calling and when, before the transcript exists. */
+export async function callStarted(i: Ident) {
+  const row = await loadOrCreate(i);
+  row.caller_number ||= i.callerNumber;
+  await saveCall(row);
+  return row;
+}
+
 /** /qualify: Vaani calls this mid-call with what the caller has said so far; we return the route. */
 export async function qualify(i: Ident & { answers?: Record<string, string>; transcript?: string }) {
   const row = await loadOrCreate(i);

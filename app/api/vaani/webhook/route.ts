@@ -1,14 +1,14 @@
 import { logEvent } from '@/lib/db';
-import { callEnded } from '@/lib/pipeline';
-import { authorised, normalizePostCall } from '@/lib/vaani';
+import { callEnded, callStarted } from '@/lib/pipeline';
+import { authorised, normalizeCallStarted, normalizePostCall } from '@/lib/vaani';
 
 export const maxDuration = 60;
 
 /**
  * Vaani's webhook. Register it in Vaani: Settings -> Webhooks ->
  *   https://<your-domain>/api/vaani/webhook?secret=<VAANI_WEBHOOK_SECRET>
- * Only `call_postprocessing` (transcript + summary ready) starts the pipeline. The other events
- * (call_started, call_ended, ...) are logged and acknowledged so Vaani sees a 200.
+ * `call_started` remembers the caller's number (only that event carries it). `call_postprocessing`
+ * (transcript + summary ready) starts the pipeline. Everything else is logged and acknowledged with a 200.
  */
 export async function POST(req: Request) {
   if (!authorised(req)) return Response.json({ error: 'unauthorised' }, { status: 401 });
@@ -16,6 +16,13 @@ export async function POST(req: Request) {
   const event = body?.event as string | undefined;
   const at = new Date().toISOString();
   if (!body) return Response.json({ status: 'ignored', reason: 'no json body' });
+
+  if (event === 'call_started') {
+    const n = normalizeCallStarted(body);
+    await callStarted({ callId: n.callId, callerNumber: n.callerNumber, startedAt: n.startedAt }).catch(() => {});
+    await logEvent({ at, event, ok: true, note: `noted caller ${n.callerNumber ?? '(no number)'}`, payload: body }).catch(() => {});
+    return Response.json({ status: 'ok' });
+  }
 
   if (event !== 'call_postprocessing') {
     await logEvent({ at, event, ok: true, note: 'logged only', payload: body }).catch(() => {});

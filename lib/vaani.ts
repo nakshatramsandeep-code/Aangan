@@ -76,8 +76,9 @@ export function normalizeCallEnded(body: Obj) {
  */
 export function normalizePostCall(body: Obj) {
   const d: Obj = body.data ?? {};
-  const durationMs = Number(pick(d, ['call_duration']) ?? pick(body, ['call_duration']));
-  const durationSec = Number.isFinite(durationMs) ? Math.round(durationMs / 1000) : 0;
+  // Docs say milliseconds, Vaani's own test payload says 120 (seconds). Anything above 10,000 can only be ms.
+  const rawDur = Number(pick(d, ['call_duration']) ?? pick(body, ['call_duration']));
+  const durationSec = Number.isFinite(rawDur) ? Math.round(rawDur > 10000 ? rawDur / 1000 : rawDur) : 0;
   const ts = pick(body, ['timestamp', 'created_at']) as string | number | undefined;
   const ended = ts ? new Date(ts) : undefined;
   const started = ended && !isNaN(ended.getTime()) && durationSec ? new Date(ended.getTime() - durationSec * 1000) : undefined;
@@ -91,5 +92,16 @@ export function normalizePostCall(body: Obj) {
     durationSec,
     transcript: toTranscript(pick(d, ['transcript']) ?? pick(body, ['transcript'])),
     vaaniSummary: pick(d, ['summary']) as string | undefined,
+  };
+}
+
+/** `call_started`: { event, timestamp, data: { call_id, room_name, call_type, agent_name, phone_number } }.
+ *  This is the only event that carries the caller's number, so we keep it until the transcript arrives. */
+export function normalizeCallStarted(body: Obj) {
+  const d: Obj = body.data ?? {};
+  return {
+    callId: String(pick(d, ['call_id', 'room_name']) ?? pick(body, ['call_id']) ?? `call-${Date.now()}`),
+    callerNumber: pick(d, ['phone_number', 'contact_number', 'from']) as string | undefined,
+    startedAt: pick(body, ['timestamp']) as string | undefined,
   };
 }
