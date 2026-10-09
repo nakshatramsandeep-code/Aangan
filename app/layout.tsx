@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { simulatorEnabled } from '@/lib/env';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <b>Aangan Studio · Phone enquiries</b>
           <nav>
             <Link href="/">Dashboard</Link>
-            <Link href="/simulate">Simulate a call</Link>
+            {simulatorEnabled && <Link href="/simulate">Simulate a call</Link>}
             <Link href="/setup">Setup</Link>
           </nav>
         </header>

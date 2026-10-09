@@ -1,8 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { notFound } from 'next/navigation';
+import { simulatorEnabled } from '@/lib/env';
 import Simulator from './Simulator';
 
 export default function SimulatePage() {
+  if (!simulatorEnabled) notFound();
   const fixtures = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'fixtures', 'phone-transcripts.json'), 'utf8'));
   return (
     <>

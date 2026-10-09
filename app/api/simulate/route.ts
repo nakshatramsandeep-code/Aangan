@@ -1,10 +1,12 @@
 import { deleteSimulated } from '@/lib/db';
+import { simulatorEnabled } from '@/lib/env';
 import { callEnded } from '@/lib/pipeline';
 
 export const maxDuration = 60;
 
 /** Dashboard-only: push a transcript through the exact call-ended pipeline, without a phone call. */
 export async function POST(req: Request) {
+  if (!simulatorEnabled) return new Response('Not found', { status: 404 });
   const { transcript, durationSec, callerNumber, startedAt } = await req.json();
   if (!transcript || typeof transcript !== 'string') return Response.json({ error: 'transcript required' }, { status: 400 });
   const row = await callEnded({
@@ -20,5 +22,6 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE() {
+  if (!simulatorEnabled) return new Response('Not found', { status: 404 });
   return Response.json({ removed: await deleteSimulated() });
 }
