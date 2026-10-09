@@ -29,8 +29,11 @@ async function loadOrCreate(i: Ident): Promise<CallRow> {
   };
 }
 
+/** Gemini sometimes returns the word for a missing value instead of leaving the field out. */
+const EMPTY = new Set(['', 'none', 'null', 'n/a', 'na', 'unknown', 'not stated', 'not mentioned', 'undefined']);
+
 function apply(row: CallRow, t: TriageResult, d: RouteDecision) {
-  row.fields = { ...row.fields, ...Object.fromEntries(Object.entries(t.fields).filter(([, v]) => v != null && v !== '')) };
+  row.fields = { ...row.fields, ...Object.fromEntries(Object.entries(t.fields).filter(([, v]) => v != null && !EMPTY.has(String(v).trim().toLowerCase()))) };
   row.criteria = t.criteria;
   row.complaint = t.complaint;
   row.summary = t.summary;

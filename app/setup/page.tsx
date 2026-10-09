@@ -1,3 +1,5 @@
+import { Shout } from '@/components/Header';
+import { PageHero } from '@/components/Hero';
 import { buildAgentPrompt } from '@/lib/agent-prompt';
 import { config, integrationStatus } from '@/lib/config';
 import { listEvents } from '@/lib/db';
@@ -16,9 +18,12 @@ export default async function Setup() {
   const events = await listEvents(8);
   return (
     <>
-      <h1>Setup</h1>
-      <p className="sub">Each integration switches from mock to live as soon as its keys are in the environment (<code>.env.local</code> locally, Project Settings on Vercel). Nothing else changes.</p>
-
+      <Shout>
+        <PageHero kicker="Connections" title="Setup">
+          Each integration switches from mock to live as soon as its keys are in the environment. Nothing else changes.
+        </PageHero>
+      </Shout>
+      <div className="wrap">
       <div className="card">
         <Row name="Neon" ok={s.neon} need="DATABASE_URL" />
         <Row name="Gemini Flash" ok={s.gemini} need="GEMINI_API_KEY (rule-based triage until then)" />
@@ -62,6 +67,7 @@ export default async function Setup() {
       <h2>Agent prompt for Vaani</h2>
       <p className="sub">Built from services.md, qualified.md and never-say.md. pricing.md's numbers are never included, so the agent cannot repeat them.</p>
       <pre className="prompt">{buildAgentPrompt('standalone')}</pre>
+      </div>
     </>
   );
 }

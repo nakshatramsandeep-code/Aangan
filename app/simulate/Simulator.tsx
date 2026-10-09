@@ -41,12 +41,12 @@ export default function Simulator({ fixtures }: { fixtures: Fixture[] }) {
         <select onChange={(e) => setText(usable.find((f) => f.id === e.target.value)?.transcript ?? '')} defaultValue={usable[0]?.id}>
           {usable.map((f) => <option key={f.id} value={f.id}>{f.id} · {f.date} {f.time} · expected {f.expected}</option>)}
         </select>
-        <button disabled={busy || !text.trim()} onClick={() => run(text)}>{busy ? 'Running…' : 'Run this call'}</button>
-        <button className="ghost" disabled={busy} onClick={runAll}>Run all {usable.length}</button>
-        <button className="ghost" disabled={busy} onClick={clear}>Delete simulated calls</button>
+        <button className="btn yellow" disabled={busy || !text.trim()} onClick={() => run(text)}>{busy ? 'Running…' : 'Run this call'}</button>
+        <button className="btn ghost" disabled={busy} onClick={runAll}>Run all {usable.length}</button>
+        <button className="btn ghost" disabled={busy} onClick={clear}>Delete simulated calls</button>
       </div>
       <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
-      {result && <p>Routed <b>{result.route}</b>. <Link href={`/calls/${encodeURIComponent(result.id)}`}>Open the call</Link></p>}
+      {result && <p>Routed <b>{result.route}</b>. <Link className="link" href={`/calls/${encodeURIComponent(result.id)}`}>Open the call</Link></p>}
       {error && <p className="bad">{error}</p>}
     </div>
   );

@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Shout } from '@/components/Header';
+import { PageHero } from '@/components/Hero';
 import { RoutePill } from '@/components/RoutePill';
 import { getCall } from '@/lib/db';
 import { dur, inrExact, when } from '@/lib/format';
@@ -19,12 +21,17 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <p className="sub"><Link href="/">← All calls</Link></p>
-      <h1>{f.name ?? 'Unknown caller'} <RoutePill route={c.route} /></h1>
-      <p className="sub">
-        {when(c.created_at)} · {c.caller_number ?? 'no number'} · {dur(c.duration_sec)}
-        {c.after_hours && ' · after hours'}{c.simulated && ' · simulated'} · triage by {c.engine ?? '-'}
-      </p>
+      <Shout>
+        <PageHero
+          kicker="Call log"
+          title={<>{f.name ?? 'Unknown caller'} <RoutePill route={c.route} /></>}
+        >
+          {when(c.created_at)} · {c.caller_number ?? 'no number'} · {dur(c.duration_sec)}
+          {c.after_hours && ' · after hours'}{c.simulated && ' · simulated'} · triage by {c.engine ?? '-'}
+        </PageHero>
+      </Shout>
+      <div className="wrap">
+        <p className="sub" style={{ marginTop: 0 }}><Link className="link" href="/">← All calls</Link></p>
 
       {c.price_leak && (
         <div className="card warn" style={{ marginBottom: 12 }}>
@@ -77,6 +84,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
               <div key={i} className={/^(front desk|agent|assistant)\s*:/i.test(l) ? 'a' : 'c'}>{l}</div>
             ))
           : <span className="dim">No transcript stored.</span>}
+      </div>
       </div>
     </>
   );
