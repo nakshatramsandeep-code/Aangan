@@ -2,7 +2,6 @@ import { aiCostInr, voiceCostInr } from './cost';
 import { getCall, saveCall } from './db';
 import { detectPriceLeak } from './guardrails';
 import { isAfterHours } from './hours';
-import { createBooking, getSlots } from './integrations/calcom';
 import { createLead } from './integrations/hubspot';
 import { sendHandoff } from './integrations/telegram';
 import { decideRoute, splitTranscript, triage } from './triage';
@@ -108,30 +107,4 @@ export async function callEnded(
   if (lead.status === 'rejected') row.hubspot = { mock: false, error: String(lead.reason?.message ?? lead.reason) };
   await saveCall(row);
   return row;
-}
-
-/** Slots and booking are only available to calls that qualified. The route gate lives here, not in the prompt. */
-export async function slotsFor(callId: string) {
-  const row = await getCall(callId);
-  if (!row || (row.route !== 'qualified' && row.route !== 'qualified_flag')) {
-    return { allowed: false as const, reason: 'Call has not qualified. Do not offer a booking.' };
-  }
-  const { slots } = await getSlots();
-  return { allowed: true as const, slots };
-}
-
-export async function book(callId: string, args: { start: string; name?: string; phone?: string; email?: string }) {
-  const row = await getCall(callId);
-  if (!row || (row.route !== 'qualified' && row.route !== 'qualified_flag')) {
-    return { ok: false as const, reason: 'Call has not qualified. Do not book.' };
-  }
-  const booking = await createBooking({
-    start: args.start,
-    name: args.name || row.fields?.name || 'Phone enquiry',
-    phone: args.phone || row.caller_number,
-    email: args.email,
-  });
-  row.booking = booking;
-  await saveCall(row);
-  return { ok: true as const, booking };
 }

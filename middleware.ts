@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  * Dashboard + simulator are behind HTTP basic auth when DASHBOARD_PASSWORD is set.
  * Vaani's endpoints use their own shared secret instead (see lib/vaani.ts).
  */
-const VAANI_PATHS = ['/api/vaani', '/api/qualify', '/api/call-ended', '/api/slots', '/api/book'];
+const VAANI_PATHS = ['/api/vaani', '/api/qualify', '/api/call-ended'];
 
 export function middleware(req: NextRequest) {
   const pw = process.env.DASHBOARD_PASSWORD;

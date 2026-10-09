@@ -319,6 +319,6 @@ export function decideRoute(t: TriageResult): RouteDecision {
     .filter((k) => c[k].status === 'unclear')
     .map((k) => `${k.replace('_', ' ')}: ${c[k].note}`);
   const bookSay =
-    'Offer the caller consultation slots using the get_slots tool and book the one they choose with the book_consultation tool. If they ask about price, use the fixed pricing line and do not give a number.';
+    'Tell the caller a designer will call them to arrange the free consultation. Do not promise a date or time. If they ask about price, use the fixed pricing line and do not give a number.';
   return { route: flags.length ? 'qualified_flag' : 'qualified', flags, say: bookSay };
 }

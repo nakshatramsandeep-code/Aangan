@@ -42,7 +42,7 @@ export interface RouteDecision {
 }
 
 export interface BookingInfo {
-  provider: 'calcom' | 'mock';
+  provider: string; // set by whichever calendar tool is added later
   booking_id: string;
   start: string; // ISO
   attendee_name?: string;

@@ -19,7 +19,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const live = integrationStatus();
   const shown = calls.filter((c) => c.status === 'ended' && (!route || c.route === route)).slice(0, 100);
   const routes = Object.keys(ROUTE_LABEL) as Route[];
-  const mock = Object.entries({ Neon: live.neon, Gemini: live.gemini, 'Cal.com': live.calcom, HubSpot: live.hubspot, Telegram: live.telegram }).filter(([, v]) => !v).map(([k]) => k);
+  const mock = Object.entries({ Neon: live.neon, Gemini: live.gemini, HubSpot: live.hubspot, Telegram: live.telegram }).filter(([, v]) => !v).map(([k]) => k);
 
   return (
     <>
@@ -34,7 +34,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <Kpi v={`${m.answeredIn5Pct}%`} l="Answered within 5 minutes" n="Baseline: 52% answered within 48 hours" />
         <Kpi v={m.afterHours} l="After-hours calls" n={`${m.afterHoursPct}% of calls · ${m.afterHoursQualified} qualified`} />
         <Kpi v={`${m.qualifiedPct}%`} l="Qualified" n={`${m.qualifiedN} of ${m.total} reached a designer as a lead`} />
-        <Kpi v={m.bookings} l="Consultations booked" n="Booked inside the call" />
+        <Kpi v={`${Math.floor(m.avgDur / 60)}:${String(m.avgDur % 60).padStart(2, '0')}`} l="Average call length" n="Minutes:seconds" />
         <Kpi v={`${m.handoffPct}%`} l="Handoff notes sent" n={`${m.handoffs} designer alerts`} />
         <Kpi v={m.byRoute.escalate} l="Complaints escalated" n="Straight to a human" />
       </div>
@@ -54,7 +54,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <div className="row"><span>Fixed (Vercel, Neon, etc.)</span><span>{inrExact(m.cost.fixed)}</span></div>
           <div className="row"><b>Total</b><b>{inrExact(m.cost.total)}</b></div>
           <div className="row"><span>Per call</span><span>{inrExact(m.cost.perCall)}</span></div>
-          <div className="row"><span>Per booked consultation</span><span>{m.bookings ? inrExact(m.cost.perBooking) : '-'}</span></div>
+          <div className="row"><span>Per qualified lead</span><span>{m.qualifiedN ? inrExact(m.cost.perQualified) : '-'}</span></div>
         </div>
         <div className="card">
           <b>What it is generating</b>
@@ -85,16 +85,15 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
       </div>
       <div className="tablewrap">
         <table>
-          <thead><tr><th>When</th><th>Caller</th><th>Route</th><th>Summary</th><th>Booked</th><th>Length</th><th></th></tr></thead>
+          <thead><tr><th>When</th><th>Caller</th><th>Route</th><th>Summary</th><th>Length</th><th></th></tr></thead>
           <tbody>
-            {shown.length === 0 && <tr><td colSpan={7} className="dim">No calls yet. Try <Link href="/simulate">Simulate a call</Link>.</td></tr>}
+            {shown.length === 0 && <tr><td colSpan={6} className="dim">No calls yet. Try <Link href="/simulate">Simulate a call</Link>.</td></tr>}
             {shown.map((c) => (
               <tr key={c.id}>
                 <td>{when(c.created_at)}{c.after_hours && <div className="dim" style={{ fontSize: 12 }}>after hours</div>}</td>
                 <td>{c.fields?.name ?? '-'}<div className="dim" style={{ fontSize: 12 }}>{c.caller_number}{c.simulated && ' · simulated'}</div></td>
                 <td><RoutePill route={c.route} />{c.price_leak && <span title="Agent may have quoted a price"> ⚠</span>}</td>
                 <td style={{ maxWidth: 380 }}>{c.summary}{c.flags.length > 0 && <div className="dim" style={{ fontSize: 12 }}>⚑ {c.flags[0]}</div>}</td>
-                <td>{c.booking ? new Date(c.booking.start).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}</td>
                 <td>{dur(c.duration_sec)}</td>
                 <td><Link href={`/calls/${encodeURIComponent(c.id)}`}>Open</Link></td>
               </tr>

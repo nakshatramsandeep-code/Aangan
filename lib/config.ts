@@ -11,13 +11,6 @@ export const config = {
     key: process.env.GEMINI_API_KEY || '',
     model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
   },
-  cal: {
-    key: process.env.CAL_API_KEY || '',
-    eventTypeId: process.env.CAL_EVENT_TYPE_ID || '',
-    timezone: process.env.CAL_TIMEZONE || 'Asia/Kolkata',
-    /** A real studio inbox. Callers without an email are booked as local+<phone>@domain so Cal.com accepts them. */
-    fallbackEmail: process.env.CAL_FALLBACK_EMAIL || '',
-  },
   hubspot: {
     token: process.env.HUBSPOT_TOKEN || '',
     dealStage: process.env.HUBSPOT_DEAL_STAGE || 'appointmentscheduled',
@@ -46,7 +39,6 @@ export const config = {
 export const integrationStatus = () => ({
   neon: !!config.databaseUrl,
   gemini: !!config.gemini.key,
-  calcom: !!(config.cal.key && config.cal.eventTypeId),
   hubspot: !!config.hubspot.token,
   telegram: !!(config.telegram.token && config.telegram.chatId),
   vaaniSecret: !!config.webhookSecret,

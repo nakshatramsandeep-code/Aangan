@@ -60,7 +60,6 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
       <h2>Log row</h2>
       <div className="two">
         <div className="card">
-          <div className="row"><span>Slot booked</span><span>{c.booking ? `${when(c.booking.start)} (${c.booking.provider})` : 'No'}</span></div>
           <div className="row"><span>Telegram alert</span><span>{c.alert?.error ? <span className="bad">failed: {c.alert.error}</span> : c.alert?.sent ? `Sent${c.alert.mock ? ' (mock)' : ''}` : 'Not sent'}</span></div>
           <div className="row"><span>HubSpot</span><span>{c.hubspot?.error ? <span className="bad">failed: {c.hubspot.error}</span> : c.hubspot?.deal_id ? `Deal ${c.hubspot.deal_id}${c.hubspot.mock ? ' (mock)' : ''}` : 'No deal (not qualified)'}</span></div>
         </div>

@@ -47,7 +47,7 @@ export function computeMetrics(all: CallRow[], days = 30) {
     cost: {
       voice, ai, fixed, total: totalCost,
       perCall: total ? totalCost / total : 0,
-      perBooking: bookings ? totalCost / bookings : 0,
+      perQualified: qualifiedN ? totalCost / qualifiedN : 0,
     },
     pipeline: {
       low: lakh(config.projectValueLakh.low) * qualifiedN,

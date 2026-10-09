@@ -22,7 +22,6 @@ export default async function Setup() {
       <div className="card">
         <Row name="Neon" ok={s.neon} need="DATABASE_URL" />
         <Row name="Gemini Flash" ok={s.gemini} need="GEMINI_API_KEY (rule-based triage until then)" />
-        <Row name="Cal.com" ok={s.calcom} need="CAL_API_KEY, CAL_EVENT_TYPE_ID (used by the simulator; Vaani books through its own Cal.com integration)" />
         <Row name="HubSpot" ok={s.hubspot} need="HUBSPOT_TOKEN" />
         <Row name="Telegram" ok={s.telegram} need="TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID" />
         <Row name="Vaani webhook secret" ok={s.vaaniSecret} need="VAANI_WEBHOOK_SECRET (the webhook is open in dev, closed in production without it)" />
@@ -33,7 +32,6 @@ export default async function Setup() {
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           <li><b>Create the agent</b>: paste the prompt below, pick an Indian English voice, language English (or Hindi if you want).</li>
           <li><b>Telephony</b>: Settings → Telephony → Provision a Number (or connect a SIP trunk), and assign it to the agent. This is the studio's AI line.</li>
-          <li><b>Cal.com</b>: Settings → Integrations → Cal.com. Paste the Cal.com API key and choose the consultation event type. The agent then books during the call.</li>
           <li>
             <b>Webhook</b>: Settings → Webhooks → add this URL:
             <div style={{ margin: '6px 0' }}><code>{base}/api/vaani/webhook?secret=&lt;VAANI_WEBHOOK_SECRET&gt;</code></div>
