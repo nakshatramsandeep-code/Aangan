@@ -104,6 +104,11 @@ export async function deleteHold(eventId: string) {
   });
 }
 
+/** Reads an event back from Google, so tests can verify what was really created. */
+export async function getHold(eventId: string) {
+  return g(`/calendars/${cal()}/events/${encodeURIComponent(eventId)}`);
+}
+
 /** For the status page: can we sign in and read free/busy? Uses only the free/busy scope. */
 export async function checkAccess() {
   const now = new Date();
