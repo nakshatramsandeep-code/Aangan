@@ -133,12 +133,11 @@ function tidyFields(f: Fields): Fields {
   };
 }
 
-async function gemini(input: TriageInput): Promise<TriageResult> {
+async function gemini(input: TriageInput, timeoutMs: number): Promise<TriageResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.gemini.model}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
-    // A slow reply must not stall the webhook: after 40s we fall back to the rule-based triage.
-    signal: AbortSignal.timeout(40_000),
+    signal: AbortSignal.timeout(timeoutMs),
     headers: { 'content-type': 'application/json', 'x-goog-api-key': config.gemini.key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt(input.asOf) }] },
@@ -151,7 +150,7 @@ async function gemini(input: TriageInput): Promise<TriageResult> {
       },
     }),
   });
-  if (!res.ok) throw new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) throw Object.assign(new Error(`Gemini ${res.status}: ${(await res.text()).slice(0, 300)}`), { status: res.status });
   const json = await res.json();
   const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!text) throw new Error('Gemini returned no content');
@@ -279,16 +278,22 @@ function heuristic(input: TriageInput): TriageResult {
 
 export async function triage(input: TriageInput): Promise<TriageResult> {
   if (config.gemini.key) {
-    try {
-      const g = await gemini(input);
-      // Gemini sometimes omits facts the caller plainly stated. Fill gaps from the rule-based reading.
-      const h = heuristic(input).fields;
-      for (const k of ['name', 'locality', 'area_sqft', 'project_type'] as const) {
-        if (g.fields[k] == null || g.fields[k] === '') (g.fields as Record<string, unknown>)[k] = h[k];
+    // Gemini's latency has a long tail (usually ~8 s, sometimes 40 s+). A slow request is usually a stuck
+    // one, so two short attempts beat one long wait. Worst case 2 x 18 s, inside the webhook's 60 s budget.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const g = await gemini(input, 18_000);
+        // Gemini sometimes omits facts the caller plainly stated. Fill gaps from the rule-based reading.
+        const h = heuristic(input).fields;
+        for (const k of ['name', 'locality', 'area_sqft', 'project_type'] as const) {
+          if (g.fields[k] == null || g.fields[k] === '') (g.fields as Record<string, unknown>)[k] = h[k];
+        }
+        return g;
+      } catch (e) {
+        const status = (e as { status?: number }).status;
+        console.error(`[triage] Gemini attempt ${attempt} failed:`, (e as Error).message);
+        if (status && status < 500) break; // 4xx (bad key, quota, bad model): retrying will not help
       }
-      return g;
-    } catch (e) {
-      console.error('[triage] Gemini failed, using rule-based fallback:', e);
     }
   }
   return heuristic(input);

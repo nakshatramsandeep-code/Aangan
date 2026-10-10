@@ -29,6 +29,7 @@ const DB = process.env.DATABASE_URL ?? '';
 const HUBSPOT = process.env.HUBSPOT_TOKEN ?? '';
 const STARTED = Date.now();
 const RUN = STARTED.toString(36);
+const ONLY = (process.argv[3] ?? '').toUpperCase();
 
 let pass = 0, fail = 0;
 const out: string[] = [];
@@ -172,10 +173,12 @@ async function run(s: Scenario) {
   for (const c of h.checks) check(c.status === 'ok' || c.status === 'warn', `Health: ${c.name} reachable`, `${c.status} · ${c.detail}`);
 
   const results: Record<string, any> = {};
-  for (const s of SCENARIOS) results[s.key] = await run(s);
+  const list = ONLY ? SCENARIOS.filter((x) => ONLY.includes(x.key)) : SCENARIOS;
+  for (const s of list) results[s.key] = await run(s);
 
   say('\nF. Retry safety (Vaani redelivers the A post-call event)');
   const a = SCENARIOS[0]; const before = results.A;
+  if (!before) say('   (skipped: scenario A not run)');
   if (before) {
     const again = await hook({ event: 'call_postprocessing', call_id: a.id, timestamp: a.at, data: { call_id: a.id, call_duration: a.durationMs, transcript: a.transcript.replace('Meera', 'Someone Else') } });
     const after = await row(a.id);
@@ -194,11 +197,11 @@ async function run(s: Scenario) {
   say('\nG. Dashboard');
   const html = await (await fetch(`${BASE}/`, { cache: 'no-store' })).text();
   check(html.includes('Pipeline status'), 'Dashboard shows the pipeline status panel');
-  for (const s of SCENARIOS.filter((x) => !x.expect.silent)) {
+  for (const s of list.filter((x) => !x.expect.silent)) {
     const num = s.phone.replace(/^\+91(\d{5})(\d{5})$/, '+91 $1 $2');
     check(html.includes(num), `Dashboard lists call ${s.key}`, num);
   }
-  for (const s of SCENARIOS) {
+  for (const s of list) {
     const res = await fetch(`${BASE}/calls/${s.id}`, { cache: 'no-store' });
     check(res.status === 200, `Call page ${s.key} opens`, `HTTP ${res.status}`);
   }
