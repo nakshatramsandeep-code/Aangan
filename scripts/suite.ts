@@ -178,10 +178,11 @@ async function runCall(c: Call) {
   const t0 = Date.now();
   const s1 = await hook({ event: 'call_started', timestamp: c.at, data: { call_id: id, room_name: id, call_type: 'Inbound', agent_name: 'Aangan', phone_number: c.phone } });
   const s2 = await hook({ event: 'call_ended', timestamp: c.at, data: { call_id: id, room_name: id, end_reason: 'completed', call_duration: c.secs, technical_issue: false } });
+  const t3 = Date.now();
   const s3 = await hook({ event: 'call_postprocessing', call_id: id, timestamp: c.at, data: { call_id: id, summary: '', entities: {}, dispositions: {}, recording_url: '', call_duration: c.secs * 1000, transcript: c.transcript } });
-  const ackMs = Date.now() - t0;
+  const ackMs = Date.now() - t3;
   t(s1.status === 200 && s2.status === 200, 'Webhook accepted call_started and call_ended');
-  t(s3.status === 200 && s3.json?.status === 'accepted' && ackMs < 5000, 'Webhook acknowledged the post-call event at once', `HTTP ${s3.status}, ${ackMs} ms for all three events`);
+  t(s3.status === 200 && s3.json?.status === 'accepted' && ackMs < 5000, 'Webhook acknowledged the post-call event at once', `HTTP ${s3.status}, ${ackMs} ms for the post-call request`);
   const done = await waitDone(id);
   t(done.ms < 235_000, 'Background processing finished', `${(done.ms / 1000).toFixed(0)} s after the acknowledgement`);
 
