@@ -27,7 +27,8 @@ const BASE = (process.argv[2] || 'https://aangan-gamma.vercel.app').replace(/\/$
 const SECRET = process.env.VAANI_WEBHOOK_SECRET ?? '';
 const DB = process.env.DATABASE_URL ?? '';
 const HUBSPOT = process.env.HUBSPOT_TOKEN ?? '';
-const RUN = Date.now().toString(36);
+const STARTED = Date.now();
+const RUN = STARTED.toString(36);
 
 let pass = 0, fail = 0;
 const out: string[] = [];
@@ -183,10 +184,10 @@ async function run(s: Scenario) {
     check(after.alert?.at === before.alert?.at, 'No second Telegram message', after.alert?.at);
     check(JSON.stringify(after.ai_tokens) === JSON.stringify(before.ai_tokens), 'No second Gemini call (tokens unchanged)');
     if (HUBSPOT) {
-      const res = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', { method: 'POST', headers: { Authorization: `Bearer ${HUBSPOT}`, 'content-type': 'application/json' }, body: JSON.stringify({ query: 'E2E Test Meera', limit: 20, properties: ['dealname'] }) });
+      // Only scenario A creates a deal, so exactly one deal should exist that was created since the run began.
+      const res = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', { method: 'POST', headers: { Authorization: `Bearer ${HUBSPOT}`, 'content-type': 'application/json' }, body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: 'createdate', operator: 'GTE', value: String(STARTED) }] }], limit: 20, properties: ['dealname'] }) });
       const d: any = await res.json();
-      const mine = (d.results ?? []).filter((x: any) => x.id === before.hubspot?.deal_id).length;
-      check(mine === 1, 'HubSpot: exactly one deal for this call', `${mine}`);
+      check((d.results ?? []).length === 1, 'HubSpot: exactly one deal created during this run', `${(d.results ?? []).length}: ${(d.results ?? []).map((x: any) => x.properties.dealname).join(' | ')}`);
     }
   }
 
@@ -194,8 +195,8 @@ async function run(s: Scenario) {
   const html = await (await fetch(`${BASE}/`, { cache: 'no-store' })).text();
   check(html.includes('Pipeline status'), 'Dashboard shows the pipeline status panel');
   for (const s of SCENARIOS.filter((x) => !x.expect.silent)) {
-    const name = results[s.key]?.fields?.name;
-    check(!!name && html.includes(name.split(' ')[0]), `Dashboard lists call ${s.key}`, name ?? '');
+    const num = s.phone.replace(/^\+91(\d{5})(\d{5})$/, '+91 $1 $2');
+    check(html.includes(num), `Dashboard lists call ${s.key}`, num);
   }
   for (const s of SCENARIOS) {
     const res = await fetch(`${BASE}/calls/${s.id}`, { cache: 'no-store' });

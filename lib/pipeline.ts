@@ -1,3 +1,4 @@
+import { config } from './config';
 import { aiCostInr, voiceCostInr } from './cost';
 import { getCall, saveCall } from './db';
 import { detectPriceLeak } from './guardrails';
@@ -38,7 +39,9 @@ function apply(row: CallRow, t: TriageResult, d: RouteDecision) {
   row.complaint = t.complaint;
   row.summary = t.summary;
   row.route = d.route;
-  row.flags = d.flags;
+  row.flags = [...d.flags];
+  // Gemini failed or was too slow and the rule-based reader took over: say so, because it is less thorough.
+  if (t.engine === 'heuristic' && config.gemini.key) row.flags.push('Read by the fallback rules because Gemini was unavailable. Please check the name and details.');
   row.next_question = d.next_question;
   row.engine = t.engine;
   const prev = row.ai_tokens ?? { input: 0, output: 0 };

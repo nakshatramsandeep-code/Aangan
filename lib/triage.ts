@@ -137,14 +137,15 @@ async function gemini(input: TriageInput): Promise<TriageResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.gemini.model}:generateContent`;
   const res = await fetch(url, {
     method: 'POST',
-    // A slow reply must not stall the webhook: after 25s we fall back to the rule-based triage.
-    signal: AbortSignal.timeout(25_000),
+    // A slow reply must not stall the webhook: after 40s we fall back to the rule-based triage.
+    signal: AbortSignal.timeout(40_000),
     headers: { 'content-type': 'application/json', 'x-goog-api-key': config.gemini.key },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt(input.asOf) }] },
       contents: [{ role: 'user', parts: [{ text: `What the caller said:\n\n${inputText(input)}` }] }],
       generationConfig: {
         temperature: 0,
+        ...(config.gemini.thinking ? { thinkingConfig: { thinkingLevel: config.gemini.thinking } } : {}),
         responseMimeType: 'application/json',
         responseSchema: RESPONSE_SCHEMA,
       },
@@ -187,7 +188,7 @@ function heuristic(input: TriageInput): TriageResult {
   const lower = text.toLowerCase();
 
   const fields: Fields = {};
-  fields.name = text.match(/\b(?:[Ii]'m|[Ii] am|[Mm]y name is|[Tt]his is)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)(?=[\s,.])/)?.[1];
+  fields.name = text.match(/\b(?:[Ii]'m|[Ii] am|[Mm]y name is|[Tt]his is)\s+([A-Z][\w-]*(?:\s[A-Z][\w-]*)?)(?=[\s,.])/)?.[1];
   const area = text.match(/([\d,]{3,6})\s*(?:sq\.?\s*ft|sqft|square feet)/i)?.[1];
   if (area) fields.area_sqft = Number(area.replace(/,/g, ''));
   fields.project_type = /restaurant|hotel|cafe|retail|showroom|gym/.test(lower)

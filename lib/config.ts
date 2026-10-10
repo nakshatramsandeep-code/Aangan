@@ -10,6 +10,8 @@ export const config = {
   gemini: {
     key: process.env.GEMINI_API_KEY || '',
     model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
+    /** Optional thinking level ('low'). Left empty: 'low' was faster on trivial prompts but misjudged 2 of the 19 real calls. */
+    thinking: process.env.GEMINI_THINKING ?? '',
   },
   hubspot: {
     token: process.env.HUBSPOT_TOKEN || '',
