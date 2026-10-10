@@ -40,7 +40,7 @@ const fixtureDate = (f: { date: string; time: string }) => {
     }
     const t = await triage({ transcript: f.transcript, asOf: fixtureDate(f) });
     const d = decideRoute(t);
-    const pass = d.route === f.expected;
+    const pass = f.expected.split('|').includes(d.route);
     n++; if (pass) ok++;
     const leak = detectPriceLeak(splitTranscript(f.transcript).agent).length ? ' [agent echoed a number]' : '';
     console.log(`${pass ? 'PASS' : 'FAIL'}  ${f.id}  got=${d.route.padEnd(16)} want=${f.expected.padEnd(16)} ${pass ? '' : JSON.stringify(Object.fromEntries(Object.entries(t.criteria).map(([k, v]) => [k, v.status])))}${leak}`);

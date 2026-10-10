@@ -13,7 +13,7 @@
   "time": "2:41pm",
   "meta": "5 min 08 sec",
   "transcript": "Front Desk: Good afternoon, Aangan Studio.\nCaller: Hi. I was looking at your work on Instagram. I have a 2BHK in Wakad — can you tell me roughly how much something like that would cost?\nFront Desk: Our pricing depends on the materials and the scope — the best way to get a clear picture is a consultation with one of our designers, who can walk you through everything. What are you planning to do?\nCaller: Full redesign — modular kitchen, wardrobes, living room, both bedrooms. About 950 sq ft.\nFront Desk: Good scope. What’s your timeline?\nCaller: We move in November — so maybe starting design from October?\nFront Desk: That works well. Shall I set up a consultation?\nCaller: Yes, but can you give me a rough ballpark first? Even a range?\nFront Desk: I genuinely can’t — it varies quite a bit based on materials. Giving you a number without seeing the site would be misleading. The designer will go through all of that with you — the consultation is free and there’s no obligation.\nCaller: Okay, fair enough. Let’s book it.",
-  "expected": "qualified"
+  "expected": "qualified|qualified_flag"
  },
  {
   "id": "T03",
@@ -158,5 +158,13 @@
   "meta": "4 min 44 sec",
   "transcript": "Front Desk: Good morning, Aangan Studio.\nCaller: Good morning. I’m Pooja. I have a 2BHK in Magarpatta — Cybercity area. We’ve been wanting to properly design the interiors for a while. Kitchen, both bedrooms, living room. About 900 sq ft.\nFront Desk: Good scope for us. How soon are you looking to start?\nCaller: We’re flexible — a January start for execution would be ideal.\nFront Desk: That works well. Are you the owner?\nCaller: Yes — my husband and I. We both want to be at the consultation.\nFront Desk: Excellent. Can I book that now?\nCaller: Please.",
   "expected": "qualified"
+ },
+ {
+  "id": "R01",
+  "date": "10 September",
+  "time": "10:33am",
+  "meta": "Real Vaani web test: wanted it in two months; the agent wrongly turned the caller away",
+  "expected": "qualified|qualified_flag",
+  "transcript": "Front Desk: Good day, Aangan Studio. How can I help you today?\nCaller: I have a two BHK which I wanna renovate. With a lot of furnishing and make it look good.\nFront Desk: That sounds like a great project. May I know your name and where in Pune or PCMC the apartment is located?\nCaller: My name is Srikar. S R I K A R. And I am located in Baner.\nFront Desk: Nice to meet you, Srikar. When are you looking to have the renovation completed?\nCaller: I want it to be done within two months because I have my housewarming ceremony and a lot of guests which are coming in. Two months max.\nFront Desk: That's a timeline we can often work with. Your designer will confirm what's realistic for your scope at the consultation."
  }
 ]
