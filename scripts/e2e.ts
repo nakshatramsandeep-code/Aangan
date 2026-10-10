@@ -50,6 +50,20 @@ const hook = async (body: unknown, secret = SECRET) => {
 };
 const row = async (id: string): Promise<any> => ((await neon(DB).query('select data from calls where id = $1', [id]))[0]?.data) ?? null;
 
+
+/** The webhook answers at once and triages in the background, so poll Neon until the call is fully processed. */
+async function waitDone(id: string, maxMs = 240_000): Promise<{ row: any; ms: number }> {
+  const t0 = Date.now();
+  for (;;) {
+    const r = await row(id);
+    const q = r && (r.route === 'qualified' || r.route === 'qualified_flag');
+    const done = r && r.status === 'ended' && !r.processing_since &&
+      (r.silent || (r.route && (r.alert?.sent || r.alert?.error) && (!q || r.hubspot?.deal_id || r.hubspot?.error)));
+    if (done || Date.now() - t0 > maxMs) return { row: r, ms: Date.now() - t0 };
+    await new Promise((res) => setTimeout(res, 3000));
+  }
+}
+
 /** Last Monday-Friday at hh:mm IST as an ISO string (so "in office hours" is true whatever day the test runs). */
 function weekdayAt(hh: number, mm: number, wantAfterHours = false) {
   const d = new Date();
@@ -129,9 +143,11 @@ async function run(s: Scenario) {
   check(ended.status === 200, 'Vaani → webhook: call_ended accepted', `HTTP ${ended.status}`);
   const t0 = Date.now();
   const post = await hook({ event: 'call_postprocessing', call_id: room, timestamp: s.at, data: { call_id: room, summary: 'x', entities: {}, dispositions: {}, recording_url: '', call_duration: s.durationMs, transcript: s.transcript } });
-  check(post.status === 200 && post.json?.status === 'ok', 'Webhook: call_postprocessing processed', `HTTP ${post.status} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  check(post.status === 200 && post.json?.status === 'accepted', 'Webhook: call_postprocessing acknowledged at once', `HTTP ${post.status} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+  const done = await waitDone(room);
+  check(done.ms < 235_000, 'Background processing finished', `${(done.ms / 1000).toFixed(0)} s`);
 
-  const r = await row(room);
+  const r = done.row;
   if (!check(!!r, 'Neon: row stored')) return null;
   check(r.caller_number === s.phone, 'Neon: caller number carried over from call_started', r.caller_number);
   check(r.after_hours === s.expect.afterHours, `Neon: after-hours flag is ${s.expect.afterHours}`, String(r.after_hours));
@@ -181,6 +197,7 @@ async function run(s: Scenario) {
   if (!before) say('   (skipped: scenario A not run)');
   if (before) {
     const again = await hook({ event: 'call_postprocessing', call_id: a.id, timestamp: a.at, data: { call_id: a.id, call_duration: a.durationMs, transcript: a.transcript.replace('Meera', 'Someone Else') } });
+    await new Promise((res) => setTimeout(res, 8000)); // let the background job run (it should do nothing)
     const after = await row(a.id);
     check(again.status === 200, 'Redelivery accepted', `HTTP ${again.status}`);
     check(after.route === before.route && after.hubspot?.deal_id === before.hubspot?.deal_id, 'No second HubSpot deal, route unchanged', after.hubspot?.deal_id);

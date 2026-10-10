@@ -279,10 +279,10 @@ function heuristic(input: TriageInput): TriageResult {
 export async function triage(input: TriageInput): Promise<TriageResult> {
   if (config.gemini.key) {
     // Gemini's latency has a long tail (usually ~8 s, sometimes 40 s+). A slow request is usually a stuck
-    // one, so two short attempts beat one long wait. Worst case 2 x 18 s, inside the webhook's 60 s budget.
+    // one, so a second attempt beats one very long wait. Triage runs after the webhook has already answered Vaani, so there is room for 2 x 45 s.
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const g = await gemini(input, 18_000);
+        const g = await gemini(input, 45_000);
         // Gemini sometimes omits facts the caller plainly stated. Fill gaps from the rule-based reading.
         const h = heuristic(input).fields;
         for (const k of ['name', 'locality', 'area_sqft', 'project_type'] as const) {

@@ -81,6 +81,10 @@ export async function callEnded(
 ) {
   const row = await loadOrCreate(i);
   if (settled(row)) return row;
+  // Another delivery of this call is being processed right now (Vaani retried): let it finish.
+  if (row.processing_since && Date.now() - new Date(row.processing_since).getTime() < 150_000) return row;
+  row.processing_since = new Date().toISOString();
+  await saveCall(row);
 
   row.caller_number ||= i.callerNumber;
   row.status = 'ended';
@@ -105,6 +109,7 @@ export async function callEnded(
     row.route = undefined;
     row.summary = 'No conversation: the caller did not speak.';
     row.flags = [];
+    row.processing_since = undefined;
     await saveCall(row);
     return row;
   }
@@ -127,6 +132,7 @@ export async function callEnded(
   if (alert.status === 'rejected') row.alert = { sent: false, mock: false, error: String(alert.reason?.message ?? alert.reason) };
   if (lead.status === 'fulfilled' && lead.value) row.hubspot = lead.value;
   if (lead.status === 'rejected') row.hubspot = { mock: false, error: String(lead.reason?.message ?? lead.reason) };
+  row.processing_since = undefined;
   await saveCall(row);
   return row;
 }

@@ -1,8 +1,10 @@
+import { after } from 'next/server';
 import { logEvent } from '@/lib/db';
 import { callEnded, callStarted } from '@/lib/pipeline';
 import { authorised, normalizeCallStarted, normalizePostCall } from '@/lib/vaani';
 
-export const maxDuration = 60;
+// Triage can take a while (Gemini's slow tail), so it runs after the response with room to spare.
+export const maxDuration = 120;
 
 /**
  * Vaani's webhook. Register it in Vaani: Settings -> Webhooks ->
@@ -30,18 +32,17 @@ export async function POST(req: Request) {
   }
 
   const n = normalizePostCall(body);
-  try {
-    const row = await callEnded({
-      callId: n.callId,
-      callerNumber: n.callerNumber,
-      startedAt: n.startedAt,
-      transcript: n.transcript,
-      durationSec: n.durationSec,
-    });
-    await logEvent({ at, event, ok: true, note: row.silent ? 'no conversation, not triaged' : `routed ${row.route}`, payload: body }).catch(() => {});
-    return Response.json({ status: 'ok', id: row.id, route: row.route });
-  } catch (e) {
-    await logEvent({ at, event, ok: false, note: String((e as Error).message), payload: body }).catch(() => {});
-    return Response.json({ status: 'error' }, { status: 500 });
-  }
+  await logEvent({ at, event, ok: true, note: 'accepted, processing', payload: body }).catch(() => {});
+
+  // Answer Vaani at once. Vaani expects a quick 200 and may retry or disable a slow webhook; the
+  // work (Gemini, Telegram, HubSpot) continues after the response and is idempotent if Vaani retries.
+  after(async () => {
+    try {
+      const row = await callEnded({ callId: n.callId, callerNumber: n.callerNumber, startedAt: n.startedAt, transcript: n.transcript, durationSec: n.durationSec });
+      await logEvent({ at: new Date().toISOString(), event, ok: true, note: row.silent ? 'no conversation, not triaged' : `routed ${row.route}`, payload: { call_id: n.callId } });
+    } catch (e) {
+      await logEvent({ at: new Date().toISOString(), event, ok: false, note: String((e as Error).message), payload: { call_id: n.callId } }).catch(() => {});
+    }
+  });
+  return Response.json({ status: 'accepted', id: n.callId });
 }

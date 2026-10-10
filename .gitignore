@@ -14,3 +14,4 @@ scratch-*.ts
 !.env.example
 vaani-agent-prompt.txt
 e2e-report.txt
+suite-report.txt

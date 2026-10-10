@@ -8,6 +8,7 @@
     "start": "next start",
     "eval": "tsx scripts/eval.ts",
     "e2e": "tsx scripts/e2e.ts",
+    "suite": "tsx scripts/suite.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

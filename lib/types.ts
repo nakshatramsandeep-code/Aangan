@@ -77,5 +77,7 @@ export interface CallRow {
   ai_tokens?: { input: number; output: number };
   /** The caller never spoke (silent line, dropped call, browser test). Logged and costed, but not triaged or counted. */
   silent?: boolean;
+  /** Set while a webhook is being processed, so a retry that arrives meanwhile does not do the work twice. */
+  processing_since?: string;
   simulated?: boolean;
 }
