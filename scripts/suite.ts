@@ -79,6 +79,7 @@ function convo(hh: number, mm: number, turns: ['A' | 'U', string][]) {
 }
 
 type Expect = {
+  timelinePass?: boolean;
   email?: string; preferred?: boolean; hold?: boolean; noEmail?: boolean;
   route?: string; silent?: boolean; deal?: boolean; afterHours: boolean;
   name?: string; locality?: string; area?: number; type?: string;
@@ -173,6 +174,18 @@ const CALLS: Call[] = [
     transcript: convo(10, 20, [GREET, ['A', 'Hello?']]),
     expect: { silent: true, deal: false, afterHours: false },
   },
+  {
+    n: 11, title: 'Needs it in two months, name spelled out (the call Vaani wrongly turned away)', phone: '+919999900211', at: weekdayAt(10, 33), secs: 150,
+    transcript: convo(10, 33, [GREET,
+      ['U', 'I have a two BHK which I want to renovate, with a lot of furnishing, to make it look good.'],
+      ['A', 'That sounds like a great project. May I have your name, and where is the apartment?'],
+      ['U', 'My name is Srikar. S R I K A R. The flat is in Baner.'],
+      ['A', 'Thank you, Srikar. S, R, I, K, A, R. Is that right? When would you like it completed?'],
+      ['U', 'Yes, that is right. I want it done within two months, because I have my housewarming and many guests are coming. Two months at the most.'],
+      ['A', 'That is a timeline we can often work with. Your designer will confirm what is realistic for your scope at the consultation. Which weekday and time suits you for the designer\'s call?'],
+      ['U', 'Tuesday at 4 pm would be good. I own the flat, so I decide.']]),
+    expect: { route: 'qualified|qualified_flag', deal: true, afterHours: false, name: 'Srikar', locality: 'Baner', hold: true, timelinePass: true, leak: false },
+  },
 ];
 
 async function runCall(c: Call) {
@@ -203,7 +216,8 @@ async function runCall(c: Call) {
     return { c, id, r, L };
   }
   t(r.engine === 'gemini', 'Triage ran on Gemini', r.engine);
-  t(r.route === e.route, `Route is ${e.route}`, `got ${r.route}`);
+  t(String(e.route).split('|').includes(r.route), `Route is ${String(e.route).replace('|', ' or ')}`, `got ${r.route}`);
+  if (e.timelinePass) t(r.criteria?.timeline?.status === 'pass', 'Timeline criterion passes (two months is workable)', `${r.criteria?.timeline?.status}: ${r.criteria?.timeline?.note}`);
   if (e.name) t(!!r.fields?.name && r.fields.name.includes(e.name), 'Extracted name', r.fields?.name);
   if (e.locality) t(!!r.fields?.locality && r.fields.locality.toLowerCase().includes(e.locality.toLowerCase()), 'Extracted locality', r.fields?.locality);
   if (e.area) t(Number(r.fields?.area_sqft) === e.area, 'Extracted size', String(r.fields?.area_sqft));
@@ -268,7 +282,15 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   const bad = await fetch(`${BASE}/api/vaani/webhook?secret=wrong`, { method: 'POST', body: '{}' });
   check(bad.status === 401, 'Webhook rejects a wrong secret', `HTTP ${bad.status}`);
 
-  say('\nRunning the 10 calls (3 at a time)…');
+  // Real calls may already be on the dashboard, so the totals are checked as changes from here.
+  const before = await page('/');
+  const nums = (h: string) => {
+    const q = h.match(/(\d+) of (\d+) reached a designer/);
+    const st = (label: string) => Number(h.match(new RegExp(`${label}</div>.*?stat-v">(?:<!-- -->)?([^<]+)`))?.[1] ?? NaN);
+    return { qual: Number(q?.[1] ?? 0), total: Number(q?.[2] ?? 0), after: st('After hours'), silent: Number(h.match(/(\d+) silent calls? excluded/)?.[1] ?? 0) };
+  };
+  const b0 = nums(before);
+  say('\nRunning the 11 calls (3 at a time)…');
   const chosen = ONLY.length ? CALLS.filter((c) => ONLY.includes(c.n)) : CALLS;
   const results = await pool(chosen, 3, runCall);
   for (const x of results) { say(`\n#${x.c.n}  ${x.c.title}   [${x.c.phone}]`); x.L.forEach((l) => say(`   ${l}`)); }
@@ -290,13 +312,11 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
     const want = !x.c.expect.silent;
     check(html.includes(num(x.c.phone)) === want, want ? `Dashboard lists call #${x.c.n}` : `Dashboard keeps the silent call #${x.c.n} off the main list`, num(x.c.phone));
   }
-  const stat = (label: string) => { const m = html.match(new RegExp(`${label}</div>.*?stat-v">(?:<!-- -->)?([^<]+)`)); return m?.[1]?.trim(); };
-  check(stat('Conversations') === '9', 'Conversations stat counts 9 (the silent call is excluded)', stat('Conversations'));
-  check(html.includes('1 silent call excluded'), 'Silent call is reported as excluded');
-  check(stat('Qualified') === '33%', 'Qualified is 33% (3 of 9, flagged leads included)', stat('Qualified'));
-  check(stat('After hours') === '1', 'After-hours stat counts 1', stat('After hours'));
-  check(html.includes('Show') === false, 'All 9 calls fit on the first page');
-
+  const a1 = nums(html);
+  check(a1.total - b0.total === 10, 'Conversations rose by 10 (the silent call is excluded)', `${b0.total} -> ${a1.total}`);
+  check(a1.silent - b0.silent === 1, 'The silent call is reported as excluded', `${b0.silent} -> ${a1.silent}`);
+  check(a1.qual - b0.qual === 4, 'Qualified rose by 4 (calls #1, #2, #3 and #11; flagged leads count)', `${b0.qual} -> ${a1.qual}`);
+  check(a1.after - b0.after === 1, 'After-hours rose by 1 (call #2)', `${b0.after} -> ${a1.after}`);
   const view = async (q: string, has: number[], hasNot: number[], label: string) => {
     const p = await page(q);
     const ok = has.every((n) => p.includes(num(get[n].c.phone))) && hasNot.every((n) => !p.includes(num(get[n].c.phone)));
@@ -304,14 +324,14 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   };
   await view('/?f=qualified', [1, 2], [3, 4, 5, 9, 10], 'Qualified');
   await view('/?f=qualified_flag', [3], [1, 2, 4, 5, 9], 'Qualified, flagged');
-  await view('/?f=ask_question', [4], [1, 2, 3, 5, 9], 'Incomplete');
-  await view('/?f=close_gracefully', [5, 6, 7, 8], [1, 2, 3, 4, 9], 'Closed kindly');
-  await view('/?f=escalate', [9], [1, 2, 3, 4, 5, 6, 7, 8], 'Escalated');
+  await view('/?f=ask_question', [4], [1, 2, 3, 5, 9, 11], 'Incomplete');
+  await view('/?f=close_gracefully', [5, 6, 7, 8], [1, 2, 3, 4, 9, 11], 'Closed kindly');
+  await view('/?f=escalate', [9], [1, 2, 3, 4, 5, 6, 7, 8, 11], 'Escalated');
   await view('/?f=silent', [10], [1, 2, 3, 4, 5, 6, 7, 8, 9], 'No conversation');
   await view('/?f=price', [8], [1, 2, 3, 4, 5, 6, 7, 9], 'Possible price quoted');
   await view('/?q=Kothrud', [1], [2, 3, 4, 5, 9], 'Search “Kothrud”');
   await view('/?q=%2B91%2099999%2000209', [9], [1, 2, 3, 4, 5], 'Search by phone number');
-  await view('/?days=7', [1, 2, 3, 4, 5, 6, 7, 8, 9], [], '7-day period');
+  await view('/?days=7', [1, 2, 3, 4, 5, 6, 7, 8, 9, 11], [], '7-day period');
 
   say('\nCall pages');
   for (const x of results) {
@@ -329,10 +349,10 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   if (HUBSPOT) {
     const res = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', { method: 'POST', headers: { Authorization: `Bearer ${HUBSPOT}`, 'content-type': 'application/json' }, body: JSON.stringify({ filterGroups: [{ filters: [{ propertyName: 'createdate', operator: 'GTE', value: String(STARTED) }] }], limit: 50, properties: ['dealname'] }) });
     const d: any = await res.json();
-    check((d.results ?? []).length === 3, 'Exactly 3 deals created (calls #1, #2, #3), none for the other 7', `${(d.results ?? []).length}: ${(d.results ?? []).map((x: any) => x.properties.dealname).join(' | ')}`);
+    check((d.results ?? []).length === 4, 'Exactly 4 deals created (calls #1, #2, #3, #11), none for the other 7', `${(d.results ?? []).length}: ${(d.results ?? []).map((x: any) => x.properties.dealname).join(' | ')}`);
   }
   const sent = results.filter((x) => x.r?.alert?.sent && !x.r?.alert?.mock).length;
-  check(sent === 9, 'Telegram accepted 9 notes (every call where someone spoke), none for the silent call', `${sent}`);
+  check(sent === 10, 'Telegram accepted 10 notes (every call where someone spoke), none for the silent call', `${sent}`);
   const after: any = await (await fetch(`${BASE}/api/health`, { cache: 'no-store' })).json();
   check(after.status === 'ok', 'Every pipeline stage is still healthy after the run', after.checks.map((c: any) => `${c.name}:${c.status}`).join(' '));
 

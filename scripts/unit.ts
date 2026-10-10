@@ -81,6 +81,16 @@ const IST = (iso: string) => new Date(`${iso}+05:30`);
   const hh = await triage({ transcript: 'Caller: Hi, I am Meera. My email is meera dot iyer at gmail dot com, 3BHK in Baner, by March.' });
   ok(hh.fields.email === 'meera.iyer@gmail.com', 'The fallback reader finds a spoken email in a transcript', String(hh.fields.email));
 
+  group('The rule-based fallback (used when Gemini is slow or down)');
+  const r01 = await triage({ transcript: ['Caller: I have a two BHK which I want to renovate, with a lot of furnishing, to make it look good.', 'Front Desk: May I have your name and where is it?', 'Caller: My name is Srikar. And it is in Baner.', 'Caller: I want it done within two months because of my housewarming. Two months max.'].join('\n') });
+  const dR = (await import('../lib/triage')).decideRoute(r01);
+  ok(r01.engine === 'heuristic', 'This test really ran on the fallback');
+  ok(r01.criteria.timeline.status === 'pass', '“two months” (spelled as a word) is a workable timeline', r01.criteria.timeline.status);
+  ok(r01.criteria.real_project.status === 'pass', '“renovate … furnishing” is recognised as a project', r01.criteria.real_project.status);
+  ok(dR.route === 'qualified' && r01.fields.name === 'Srikar', 'The two-month caller is qualified and named correctly', `${dR.route} ${r01.fields.name}`);
+  const short = await triage({ transcript: 'Caller: I want my living room redone in three weeks for guests. I am in Baner.' });
+  ok(short.criteria.timeline.status === 'fail', 'Three weeks is still closed kindly', short.criteria.timeline.status);
+
   group('Reading a preferred day and time');
   const { parsePreferred } = await import('../lib/triage');
   const FRI = IST('2026-10-09T11:20:00'); // a Friday

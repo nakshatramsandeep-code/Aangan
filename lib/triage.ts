@@ -264,7 +264,7 @@ function heuristic(input: TriageInput): TriageResult {
     real = { status: 'fail', note: 'Hospitality / retail / gym is out of scope per services.md' };
   else if (/(ideas|suggestions|advice|advise|second opinion|colours?).{0,80}(just|only)|(just|only).{0,40}(ideas|suggestions|advice|advise|exploring)|myself.{0,20}execution|execution myself|just exploring/.test(lower))
     real = { status: 'fail', note: 'Wants advice or ideas, not design with execution' };
-  else if (/redo|redesign|design|interior|fit ?out|whole|full|kitchen|wardrobe|living room|bedroom|villa|flat|apartment|office/.test(lower))
+  else if (/redo|redesign|design|interior|fit ?out|whole|full|kitchen|wardrobe|living room|bedroom|villa|flat|apartment|office|renovat|remodel|revamp|makeover|furnish|\bbhk\b|\b\d\s*bhk\b/.test(lower))
     real = { status: 'pass', note: fields.scope ? `Wants design with execution: ${fields.scope}` : 'Wants a design project' };
   else real = { status: 'unclear', note: 'Not yet clear whether this is a full design and execution project' };
 
@@ -289,7 +289,7 @@ function heuristic(input: TriageInput): TriageResult {
   } else if (/before diwali|before the festival|next week|in a week/.test(lower)) {
     fields.completion_date = 'before Diwali';
     timeline = { status: 'fail', note: 'Wants it finished before Diwali, too soon for design plus execution' };
-  } else if (new RegExp(`\\b(${MONTHS})\\b|no rush|flexible|plenty of time|right away|start now|immediately|as soon as|\\b\\d+\\s*months?\\b`).test(lower)) {
+  } else if (new RegExp(`\\b(${MONTHS})\\b|no rush|flexible|plenty of time|right away|start now|immediately|as soon as|\\b(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\\s*months?\\b`).test(lower)) {
     fields.completion_date = lower.match(new RegExp(`(?:by|in|before|starting|start)\\s+(?:${MONTHS})(?:\\s+\\d{4})?|no rush|flexible|(\\d+)\\s*months?`))?.[0] ?? 'stated';
     timeline = { status: 'pass', note: `Workable timeline: ${fields.completion_date}` };
   } else timeline = { status: 'unclear', note: 'Completion date not stated' };
