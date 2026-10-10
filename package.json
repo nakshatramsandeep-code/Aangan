@@ -10,6 +10,8 @@
     "e2e": "tsx scripts/e2e.ts",
     "suite": "tsx scripts/suite.ts",
     "unit": "tsx scripts/unit.ts",
+    "google:consent": "tsx scripts/google-consent.ts",
+    "google:check": "tsx scripts/google-check.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

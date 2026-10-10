@@ -22,6 +22,10 @@ export const config = {
     /** Service-account JSON (raw or base64). The designer's calendar must be shared with its email. */
     serviceAccount: process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '',
     calendarId: process.env.GOOGLE_CALENDAR_ID || '',
+    /** OAuth alternative to the service account: works where the organization blocks service-account keys. */
+    oauthClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    oauthClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    oauthRefreshToken: process.env.GOOGLE_OAUTH_REFRESH_TOKEN || '',
   },
   consult: {
     minutes: num(process.env.CONSULT_MINUTES, 60),
@@ -58,7 +62,7 @@ export const integrationStatus = () => ({
   neon: !!config.databaseUrl,
   gemini: !!config.gemini.key,
   hubspot: !!config.hubspot.token,
-  calendar: !!(config.google.serviceAccount && config.google.calendarId),
+  calendar: !!((config.google.serviceAccount && config.google.calendarId) || (config.google.oauthClientId && config.google.oauthClientSecret && config.google.oauthRefreshToken)),
   email: !!config.resend.key,
   telegram: !!(config.telegram.token && config.telegram.chatId),
   vaaniSecret: !!config.webhookSecret,
