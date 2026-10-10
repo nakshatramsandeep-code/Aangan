@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       transcript: n.transcript,
       durationSec: n.durationSec,
     });
-    await logEvent({ at, event, ok: true, note: `routed ${row.route}`, payload: body }).catch(() => {});
+    await logEvent({ at, event, ok: true, note: row.silent ? 'no conversation, not triaged' : `routed ${row.route}`, payload: body }).catch(() => {});
     return Response.json({ status: 'ok', id: row.id, route: row.route });
   } catch (e) {
     await logEvent({ at, event, ok: false, note: String((e as Error).message), payload: body }).catch(() => {});
