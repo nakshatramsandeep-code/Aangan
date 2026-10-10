@@ -15,3 +15,5 @@ scratch-*.ts
 vaani-agent-prompt.txt
 e2e-report.txt
 suite-report.txt
+suite-run.log
+*.log
