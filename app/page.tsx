@@ -1,9 +1,7 @@
 import Link from 'next/link';
-import { Suspense } from 'react';
 import { DailyChart, ROUTE_COLOR, Sparkline } from '@/components/Charts';
 import { Icon, type IconName } from '@/components/Icons';
 import { ROUTE_LABEL, RoutePill } from '@/components/RoutePill';
-import { SystemStatus, SystemStatusSkeleton } from '@/components/SystemStatus';
 import { Topbar } from '@/components/Topbar';
 import { config, integrationStatus } from '@/lib/config';
 import { listCalls } from '@/lib/db';
@@ -84,9 +82,9 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <nav className="seg" aria-label="Period">
           {PERIODS.map((p) => <Link key={p} href={href({ days: p === 30 ? '' : String(p) })} className={p === days ? 'on' : ''}>{p}d</Link>)}
         </nav>
-        <a href="#status" className={`status ${mock.length ? 'mock' : ''}`} title={mock.length ? `Not connected: ${mock.join(', ')}` : 'All integrations connected'}>
-          <i />{mock.length ? 'Mock data' : 'Live'}
-        </a>
+        <Link href="/status" className={`status ${mock.length ? 'mock' : ''}`} title={mock.length ? `Not connected: ${mock.join(', ')}` : 'All integrations connected'}>
+          <i />{mock.length ? 'Mock data' : 'Pipeline status'}
+        </Link>
       </Topbar>
 
       <main className="container">
@@ -109,8 +107,6 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
             note={`${m.afterHoursPct}% of calls · ${m.afterHoursQualified} qualified`} trend={m.daily.map((d) => d.afterHours)} />
           <Stat icon="rupee" label="Cost per call" value={inrExact(m.cost.perCall)} note={`${inrExact(m.cost.total)} in ${days} days`} />
         </div>
-
-        <Suspense fallback={<SystemStatusSkeleton />}><SystemStatus calls={all} /></Suspense>
 
         {m.total > 0 && (
           <div className="insight">

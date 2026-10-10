@@ -117,9 +117,9 @@ async function hubspot(calls: CallRow[]): Promise<Check> {
 let cache: { at: number; sig: string; out: Check[] } | null = null;
 
 /** Live checks, in pipeline order. Cached for 60 s so a busy dashboard does not hammer the providers. */
-export async function runChecks(calls: CallRow[], events: LoggedEvent[]): Promise<Check[]> {
+export async function runChecks(calls: CallRow[], events: LoggedEvent[], fresh = false): Promise<Check[]> {
   const sig = `${calls[0]?.id}:${calls.length}:${events[0]?.at}`;
-  if (cache && Date.now() - cache.at < 60_000 && cache.sig === sig) return cache.out;
+  if (!fresh && cache && Date.now() - cache.at < 60_000 && cache.sig === sig) return cache.out;
   const out = await Promise.all([vaani(events), Promise.resolve(app()), gemini(calls), neonCheck(calls), telegram(calls), hubspot(calls)]);
   cache = { at: Date.now(), sig, out };
   return out;

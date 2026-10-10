@@ -268,3 +268,9 @@ ol.steps { margin: 0; padding-left: 20px; } ol.steps li { padding: 5px 0; }
 .pnode.skel b, .pnode.skel .prole, .pnode.skel .pdetail { background: var(--neutral-bg); border-radius: 6px; color: transparent; animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.5; } }
 a.status { transition: transform 0.2s var(--ease); } a.status:hover { transform: translateY(-1px); }
+
+.head-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.log { padding: 4px 22px 16px; }
+.log .row span:first-child { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 96px; }
+.log .row { justify-content: flex-start; gap: 14px; }
+.log .row .ev { font-weight: 550; min-width: 170px; }

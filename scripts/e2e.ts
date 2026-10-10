@@ -196,7 +196,9 @@ async function run(s: Scenario) {
 
   say('\nG. Dashboard');
   const html = await (await fetch(`${BASE}/`, { cache: 'no-store' })).text();
-  check(html.includes('Pipeline status'), 'Dashboard shows the pipeline status panel');
+  const statusPage = await (await fetch(`${BASE}/status`, { cache: 'no-store' })).text();
+  check(statusPage.includes('Pipeline status') && statusPage.includes('Telegram'), 'Status page shows the pipeline panel');
+  check(!html.includes('id="status"'), 'Dashboard itself stays free of the status panel');
   for (const s of list.filter((x) => !x.expect.silent)) {
     const num = s.phone.replace(/^\+91(\d{5})(\d{5})$/, '+91 $1 $2');
     check(html.includes(num), `Dashboard lists call ${s.key}`, num);

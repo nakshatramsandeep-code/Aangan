@@ -6,9 +6,9 @@ import type { CallRow } from '@/lib/types';
 const LABEL = { ok: 'Working', warn: 'Needs attention', down: 'Broken', off: 'Not connected' } as const;
 
 /** Streams in after the rest of the page, because it makes live calls to every provider. */
-export async function SystemStatus({ calls }: { calls: CallRow[] }) {
+export async function SystemStatus({ calls, fresh = false }: { calls: CallRow[]; fresh?: boolean }) {
   const events = await listEvents(10);
-  const checks = await runChecks(calls, events);
+  const checks = await runChecks(calls, events, fresh);
   const all = overall(checks);
   const bad = checks.filter((c) => c.status === 'down' || c.status === 'warn');
   const headline = bad.length === 0 ? 'Every stage is working' : `${bad.length} ${bad.length === 1 ? 'stage needs' : 'stages need'} attention`;
@@ -22,7 +22,10 @@ export async function SystemStatus({ calls }: { calls: CallRow[] }) {
           <h2 id="h-status" className="card-title">Pipeline status</h2>
           <p className="card-sub">{headline}. Checked live just now.</p>
         </div>
-        <span className={`overall ${all}`}><i />{all === 'ok' ? 'All systems operational' : all === 'warn' ? 'Degraded' : 'Outage'}</span>
+        <div className="head-actions">
+          <span className={`overall ${all}`}><i />{all === 'ok' ? 'All systems operational' : all === 'warn' ? 'Degraded' : 'Outage'}</span>
+          <a className="btn secondary" href={`/status?fresh=${Date.now()}`}>Check again</a>
+        </div>
       </div>
       <ol className="pipe">
         {checks.map((c: Check, i) => (
