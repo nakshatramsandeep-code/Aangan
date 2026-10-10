@@ -9,6 +9,7 @@
     "eval": "tsx scripts/eval.ts",
     "e2e": "tsx scripts/e2e.ts",
     "suite": "tsx scripts/suite.ts",
+    "unit": "tsx scripts/unit.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

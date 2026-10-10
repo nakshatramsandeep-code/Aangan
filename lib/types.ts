@@ -7,6 +7,11 @@ export interface Criterion {
 export type Criteria = Record<CriterionKey, Criterion>;
 
 export interface Fields {
+  email?: string;
+  /** What the caller said, e.g. "Tuesday afternoon". */
+  preferred_time?: string;
+  /** The same, resolved to an ISO 8601 instant (IST), when the caller named a day and a time. */
+  preferred_start?: string;
   name?: string;
   phone?: string;
   project_type?: string; // residential | commercial | other
@@ -49,6 +54,30 @@ export interface BookingInfo {
   booked_at: string;
 }
 
+export interface Consultation {
+  start?: string; // ISO
+  end?: string;
+  /** Whether the caller's own preference was used or the next free slot. */
+  source?: 'preferred' | 'next_free';
+  calendar: 'google' | 'mock' | 'none';
+  event_id?: string;
+  link?: string;
+  /** Why no hold exists (calendar not connected, no free slot). */
+  skipped?: string;
+  error?: string;
+}
+
+export interface EmailResult {
+  sent: boolean;
+  mock: boolean;
+  to?: string;
+  id?: string;
+  at?: string;
+  /** Not an error: there was nobody to email (the caller gave no address). */
+  skipped?: string;
+  error?: string;
+}
+
 export interface CallRow {
   id: string; // Vaani call id
   created_at: string; // ISO
@@ -69,8 +98,11 @@ export interface CallRow {
   engine?: 'gemini' | 'heuristic';
   price_leak?: string[]; // agent phrases that look like a price
   booking?: BookingInfo;
+  /** The tentative hold for the designer's consultation call. */
+  consultation?: Consultation;
+  email?: EmailResult;
   alert?: { sent: boolean; mock: boolean; at?: string; error?: string };
-  hubspot?: { contact_id?: string; deal_id?: string; mock: boolean; error?: string };
+  hubspot?: { contact_id?: string; deal_id?: string; meeting_id?: string; mock: boolean; error?: string };
   voice_minutes?: number;
   voice_cost_inr?: number;
   ai_cost_inr?: number;

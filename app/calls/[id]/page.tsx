@@ -6,6 +6,7 @@ import { Topbar } from '@/components/Topbar';
 import { getCall } from '@/lib/db';
 import { dur, initials, inrExact, phone, when } from '@/lib/format';
 import { buildNote } from '@/lib/integrations/telegram';
+import { describeSlot } from '@/lib/scheduling';
 import type { CriterionKey } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -52,10 +53,14 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
     ['Budget', f.budget_mentioned ?? 'Not mentioned'],
     ['Decision-maker', f.decision_maker],
     ['Phone', phone(c.caller_number) || undefined],
+    ['Email', f.email],
+    ['Preferred time', f.preferred_time],
   ];
 
   const tg = c.alert;
   const hs = c.hubspot;
+  const cons = c.consultation;
+  const em = c.email;
 
   return (
     <>
@@ -144,12 +149,26 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
                 <div className="step"><span className="node ok"><Icon name="phone" size={12} /></span><div><b>Call answered</b><span className="s">{when(c.created_at)}</span></div><span className="right">{dur(c.duration_sec)}</span></div>
                 <div className="step"><span className={`node ${c.silent ? '' : 'ok'}`}><Icon name={c.silent ? 'flat' : 'check'} size={12} /></span><div><b>{c.silent ? 'Not triaged' : 'Triaged'}</b><span className="s">{c.silent ? 'Nobody spoke' : `By ${c.engine === 'gemini' ? 'Gemini' : 'rule-based fallback'}`}</span></div></div>
                 <div className="step">
+                  <span className={`node ${cons?.error ? 'bad' : cons?.start ? 'ok' : ''}`}><Icon name={cons?.error ? 'x' : 'clock'} size={12} /></span>
+                  <div>
+                    <b>Calendar hold</b>
+                    <span className="s">
+                      {cons?.error ? `Failed: ${cons.error}` : cons?.start ? `${describeSlot(new Date(cons.start))}, tentative${cons.calendar === 'mock' ? ' (mock)' : ''}` : cons?.skipped ?? (qualified ? 'Pending' : 'Not needed')}
+                    </span>
+                  </div>
+                  {cons?.link && <a className="right link" href={cons.link} target="_blank" rel="noreferrer">Open</a>}
+                </div>
+                <div className="step">
                   <span className={`node ${tg?.error ? 'bad' : tg?.sent ? 'ok' : ''}`}><Icon name={tg?.error ? 'x' : 'send'} size={12} /></span>
                   <div><b>Telegram</b><span className="s">{tg?.error ? 'Failed. Retries on the next delivery.' : tg?.sent ? `Designer notified${tg.mock ? ' (mock)' : ''}` : c.silent ? 'Not sent' : 'Pending'}</span></div>
                 </div>
                 <div className="step">
                   <span className={`node ${hs?.error ? 'bad' : hs?.deal_id ? 'ok' : ''}`}><Icon name={hs?.error ? 'x' : 'briefcase'} size={12} /></span>
-                  <div><b>HubSpot</b><span className="s">{hs?.error ? 'Failed. Retries on the next delivery.' : hs?.deal_id ? `Deal ${hs.deal_id}${hs.mock ? ' (mock)' : ''}` : qualified ? 'Pending' : 'No deal, not qualified'}</span></div>
+                  <div><b>HubSpot</b><span className="s">{hs?.error ? 'Failed. Retries on the next delivery.' : hs?.deal_id ? `Deal ${hs.deal_id}${hs.meeting_id ? ' · consultation logged' : ''}${hs.mock ? ' (mock)' : ''}` : qualified ? 'Pending' : 'No deal, not qualified'}</span></div>
+                </div>
+                <div className="step">
+                  <span className={`node ${em?.error ? 'bad' : em?.sent ? 'ok' : ''}`}><Icon name={em?.error ? 'x' : 'message'} size={12} /></span>
+                  <div><b>Customer email</b><span className="s">{em?.error ? `Failed: ${em.error}` : em?.sent ? `Sent to ${em.to}${em.mock ? ' (mock)' : ''}` : em?.skipped ?? (qualified ? 'Pending' : 'Not sent, not qualified')}</span></div>
                 </div>
               </div>
               {tg?.sent && !c.silent && <div className="note-card">{note}</div>}

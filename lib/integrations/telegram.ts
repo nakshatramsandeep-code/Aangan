@@ -12,6 +12,18 @@ const HEAD: Record<Route, string> = {
 };
 
 /** The handoff note: everything already asked, so the designer's first call is the real conversation. */
+function consultLine(call: CallRow): string {
+  const c = call.consultation;
+  const q = call.route === 'qualified' || call.route === 'qualified_flag';
+  if (c?.start) {
+    const t = new Date(c.start).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    const pref = call.fields?.preferred_time ? ` (caller asked for ${esc(call.fields.preferred_time)}${c.source === 'preferred' ? '' : ', not free'})` : '';
+    return `<b>Calendar hold:</b> ${esc(t)} IST, tentative${pref}${c.calendar === 'mock' ? ' (mock)' : ''}\n`;
+  }
+  if (q) return `<b>Consultation:</b> designer to schedule${c?.error ? ' (calendar error)' : ''}${call.fields?.preferred_time ? `. Caller prefers ${esc(call.fields.preferred_time)}` : ''}\n`;
+  return '';
+}
+
 export function buildNote(call: CallRow): string {
   const f = call.fields ?? {};
   const c = call.criteria;
@@ -27,11 +39,8 @@ export function buildNote(call: CallRow): string {
     line('Timeline', f.completion_date) +
     line('Budget', f.budget_mentioned) +
     line('Decides', f.decision_maker) +
-    (call.booking
-      ? `<b>Slot booked:</b> ${esc(new Date(call.booking.start).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }))}\n`
-      : call.route === 'qualified' || call.route === 'qualified_flag'
-        ? '<b>Consultation:</b> designer to schedule\n'
-        : '') +
+    consultLine(call) +
+    (f.email ? `<b>Email:</b> ${esc(f.email)}${call.email?.sent && !call.email.mock ? ' (confirmation sent)' : call.email?.error ? ' (confirmation failed)' : ''}\n` : '') +
     (call.flags.length ? `\n⚠️ <b>Flags</b>\n${call.flags.map((x) => `• ${esc(x)}`).join('\n')}\n` : '') +
     (c ? `\n<b>Criteria:</b> ${Object.entries(c).map(([k, v]) => `${v.status === 'pass' ? '✔' : v.status === 'fail' ? '✘' : '?'} ${k.replace('_', ' ')}`).join(' · ')}\n` : '') +
     (call.summary ? `\n${esc(call.summary)}\n` : '') +

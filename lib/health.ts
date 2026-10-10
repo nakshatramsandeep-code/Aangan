@@ -1,11 +1,12 @@
 import { neon } from '@neondatabase/serverless';
 import { config } from './config';
+import { checkAccess, gcalLive } from './integrations/gcal';
 import type { LoggedEvent } from './db';
 import type { CallRow } from './types';
 
 export type Health = 'ok' | 'warn' | 'down' | 'off';
 export interface Check {
-  id: 'vaani' | 'app' | 'gemini' | 'neon' | 'telegram' | 'hubspot';
+  id: 'vaani' | 'app' | 'gemini' | 'neon' | 'calendar' | 'hubspot' | 'email' | 'telegram';
   name: string;
   role: string; // what this stage does in the pipeline
   status: Health;
@@ -114,13 +115,43 @@ async function hubspot(calls: CallRow[]): Promise<Check> {
   return { ...base, status: 'ok', detail: `Deals pipeline reachable${failed ? ` · ${failed} earlier failure${failed > 1 ? 's' : ''}` : ''}`, ms };
 }
 
+
+async function calendar(calls: CallRow[]): Promise<Check> {
+  const base = { id: 'calendar' as const, name: 'Google Calendar', role: 'Blocks the designer’s time' };
+  if (!gcalLive()) return { ...base, status: 'off', detail: config.google.serviceAccount ? 'Calendar ID is missing' : 'Not connected: no time is blocked or promised' };
+  const { r, err, ms } = await timed(() => checkAccess());
+  if (err) return { ...base, status: 'down', detail: /404|not found/i.test(err) ? 'Calendar not found, or not shared with the service account' : err.slice(0, 120), ms };
+  const latest = recent(calls).find((c) => c.route === 'qualified' || c.route === 'qualified_flag');
+  if (latest?.consultation?.error) return { ...base, status: 'warn', detail: `Reachable, but the latest hold failed: ${latest.consultation.error.slice(0, 80)}`, ms };
+  return { ...base, status: 'ok', detail: `Can see “${r!.name}”`, ms };
+}
+
+async function email(calls: CallRow[]): Promise<Check> {
+  const base = { id: 'email' as const, name: 'Resend', role: 'Emails the customer' };
+  if (!config.resend.key) return { ...base, status: 'off', detail: 'Not configured: confirmations are mocked' };
+  const { r, err, ms } = await timed(() => get('https://api.resend.com/domains', { Authorization: `Bearer ${config.resend.key}` }));
+  if (err) return { ...base, status: 'down', detail: err, ms };
+  const body: any = await r!.json().catch(() => ({}));
+  // A send-only key is valid but may not list domains; that is not a failure.
+  if (r!.status === 401 && body?.name === 'restricted_api_key') return { ...base, status: 'ok', detail: 'Send-only key (domains cannot be checked)', ms };
+  if (!r!.ok) return { ...base, status: 'down', detail: r!.status === 401 || r!.status === 403 ? 'API key rejected' : `HTTP ${r!.status}`, ms };
+  const verified: string[] = (body.data ?? []).filter((d: any) => d.status === 'verified').map((d: any) => d.name);
+  const fromDomain = config.resend.from.match(/@([^>\s]+)/)?.[1] ?? '';
+  const sandbox = fromDomain === 'resend.dev';
+  if (!verified.length || sandbox) return { ...base, status: 'warn', detail: 'No verified sending domain: Resend will only deliver to the account owner. Verify a domain in Resend and set RESEND_FROM', ms };
+  if (!verified.includes(fromDomain)) return { ...base, status: 'warn', detail: `RESEND_FROM uses ${fromDomain}, which is not verified in Resend`, ms };
+  const latest = recent(calls).find((c) => c.email && !c.email.skipped);
+  if (latest?.email?.error) return { ...base, status: 'warn', detail: `Reachable, but the latest email failed: ${latest.email.error.slice(0, 80)}`, ms };
+  return { ...base, status: 'ok', detail: `Sending from ${fromDomain}`, ms };
+}
+
 let cache: { at: number; sig: string; out: Check[] } | null = null;
 
 /** Live checks, in pipeline order. Cached for 60 s so a busy dashboard does not hammer the providers. */
 export async function runChecks(calls: CallRow[], events: LoggedEvent[], fresh = false): Promise<Check[]> {
   const sig = `${calls[0]?.id}:${calls.length}:${events[0]?.at}`;
   if (!fresh && cache && Date.now() - cache.at < 60_000 && cache.sig === sig) return cache.out;
-  const out = await Promise.all([vaani(events), Promise.resolve(app()), gemini(calls), neonCheck(calls), telegram(calls), hubspot(calls)]);
+  const out = await Promise.all([vaani(events), Promise.resolve(app()), gemini(calls), neonCheck(calls), calendar(calls), hubspot(calls), email(calls), telegram(calls)]);
   cache = { at: Date.now(), sig, out };
   return out;
 }

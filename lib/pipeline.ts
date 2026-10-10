@@ -3,7 +3,9 @@ import { aiCostInr, voiceCostInr } from './cost';
 import { getCall, saveCall } from './db';
 import { detectPriceLeak } from './guardrails';
 import { isAfterHours } from './hours';
-import { createLead } from './integrations/hubspot';
+import { holdConsultation, isTestCall } from './consultation';
+import { createLead, logMeeting } from './integrations/hubspot';
+import { sendConfirmation } from './integrations/resend';
 import { sendHandoff } from './integrations/telegram';
 import { decideRoute, splitTranscript, triage } from './triage';
 import type { CallRow, RouteDecision, TriageResult } from './types';
@@ -71,22 +73,40 @@ export async function qualify(i: Ident & { answers?: Record<string, string>; tra
 
 const isQualified = (r?: string) => r === 'qualified' || r === 'qualified_flag';
 
-/** Fully handled: nothing left to retry. Vaani redelivers webhooks, and a redelivery must not cost another Gemini call or a second deal. */
-const settled = (r: CallRow) =>
-  r.status === 'ended' && !!r.route !== !!r.silent && (r.silent || (!!r.alert?.sent && (!isQualified(r.route) || !!r.hubspot?.deal_id)));
+/**
+ * What is still outstanding for a call. Vaani redelivers webhooks; a redelivery must not cost another
+ * Gemini call, a second deal, a second hold or a second email, but it does retry anything that failed.
+ */
+function outstanding(r: CallRow): string[] {
+  if (r.status !== 'ended') return ['all'];
+  if (r.silent) return [];
+  if (!r.route) return ['triage'];
+  const todo: string[] = [];
+  if (!r.alert?.sent) todo.push('alert');
+  if (isQualified(r.route)) {
+    if (!r.consultation || r.consultation.error) todo.push('hold');
+    if (!r.hubspot?.deal_id) todo.push('lead');
+    if (r.consultation?.start && r.hubspot?.deal_id && !r.hubspot.meeting_id) todo.push('meeting');
+    if (!r.email || r.email.error) todo.push('email');
+  }
+  return todo;
+}
 
-/** /call-ended: log everything, then fan out to Telegram and HubSpot. Safe to call twice. */
+const errText = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 220);
+
+/** /call-ended: log everything, then fan out to the calendar, HubSpot, the customer and Telegram. Safe to call twice. */
 export async function callEnded(
   i: Ident & { answers?: Record<string, string>; transcript?: string; durationSec: number; answeredInSec?: number },
 ) {
   const row = await loadOrCreate(i);
-  if (settled(row)) return row;
+  if (outstanding(row).length === 0) return row;
   // Another delivery of this call is being processed right now (Vaani retried): let it finish.
   if (row.processing_since && Date.now() - new Date(row.processing_since).getTime() < 150_000) return row;
   row.processing_since = new Date().toISOString();
   await saveCall(row);
 
   row.caller_number ||= i.callerNumber;
+  const firstTime = row.status !== 'ended';
   row.status = 'ended';
   row.duration_sec = i.durationSec;
   row.answered_in_sec = i.answeredInSec;
@@ -115,23 +135,39 @@ export async function callEnded(
   }
   row.silent = false;
 
-  // The full transcript is the final word; it overrides whatever was decided mid-call.
-  const t = await triage({ answers: row.answers, transcript: i.transcript, asOf: new Date(row.created_at) });
-  apply(row, t, decideRoute(t));
-  await saveCall(row);
+  // The full transcript is the final word. Triage runs once; a retry only repeats the steps that failed.
+  if (firstTime || !row.route || !row.criteria) {
+    const t = await triage({ answers: row.answers, transcript: i.transcript, asOf: new Date(row.created_at) });
+    apply(row, t, decideRoute(t));
+    await saveCall(row);
+  }
 
-  // Every call where the caller spoke reaches a designer, whatever Gemini managed to extract.
-  const wantsHubspot = isQualified(row.route) && !row.hubspot?.deal_id;
-  const wantsAlert = !row.alert?.sent;
+  const todo = outstanding(row);
+  const test = isTestCall(row);
 
-  const [alert, lead] = await Promise.allSettled([
-    wantsAlert ? sendHandoff(row) : Promise.resolve(undefined),
-    wantsHubspot ? createLead(row) : Promise.resolve(undefined),
+  // 1. Block the designer's time first, so the deal and the email can name it.
+  if (todo.includes('hold')) {
+    try { row.consultation = await holdConsultation(row, test); }
+    catch (e) { row.consultation = { calendar: 'google', error: errText(e) }; }
+  }
+  // 2. The deal in HubSpot.
+  if (todo.includes('lead')) {
+    try { row.hubspot = { ...row.hubspot, ...(await createLead(row)) }; }
+    catch (e) { row.hubspot = { ...row.hubspot, mock: false, error: errText(e) }; }
+  }
+  // 3. Meeting log, customer email and designer note are independent of each other.
+  const [meeting, mail, alert] = await Promise.allSettled([
+    row.consultation?.start && row.hubspot?.deal_id && !row.hubspot.meeting_id ? logMeeting(row) : Promise.resolve(undefined),
+    isQualified(row.route) && (!row.email || row.email.error) ? sendConfirmation(row, { mock: test }) : Promise.resolve(undefined),
+    !row.alert?.sent ? sendHandoff(row) : Promise.resolve(undefined),
   ]);
+  if (meeting.status === 'fulfilled' && meeting.value && row.hubspot) row.hubspot = { ...row.hubspot, meeting_id: meeting.value, error: undefined };
+  if (meeting.status === 'rejected' && row.hubspot) row.hubspot = { ...row.hubspot, error: `Meeting log: ${errText(meeting.reason)}` };
+  if (mail.status === 'fulfilled' && mail.value) row.email = mail.value;
+  if (mail.status === 'rejected') row.email = { sent: false, mock: false, error: errText(mail.reason) };
   if (alert.status === 'fulfilled' && alert.value) row.alert = alert.value;
-  if (alert.status === 'rejected') row.alert = { sent: false, mock: false, error: String(alert.reason?.message ?? alert.reason) };
-  if (lead.status === 'fulfilled' && lead.value) row.hubspot = lead.value;
-  if (lead.status === 'rejected') row.hubspot = { mock: false, error: String(lead.reason?.message ?? lead.reason) };
+  if (alert.status === 'rejected') row.alert = { sent: false, mock: false, error: errText(alert.reason) };
+
   row.processing_since = undefined;
   await saveCall(row);
   return row;

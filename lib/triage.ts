@@ -78,6 +78,9 @@ const RESPONSE_SCHEMA = {
         completion_date: { type: 'STRING' },
         decision_maker: { type: 'STRING' },
         budget_mentioned: { type: 'STRING' },
+        email: { type: 'STRING' },
+        preferred_time: { type: 'STRING' },
+        preferred_start: { type: 'STRING' },
       },
     },
     criteria: {
@@ -103,13 +106,20 @@ Return, for each of the five criteria, status "pass", "fail" or "unclear" and a 
 - budget: ONLY judge a number the caller volunteered. If no budget was mentioned, status is "pass" with note "Not mentioned, treated as qualified". "fail" only if a volunteered number is clearly below what any project of the described scope would cost (the owner's floor for any real project is about ${config.rules.budgetFloorLakh} lakh). Never use "unclear" for a missing budget.
 - decision_maker: "pass" if the caller is the decider or is authorised by them, or if it was simply not discussed. "unclear" if the caller is only researching on behalf of someone else without confirmed authority.
 Set complaint=true if the caller is complaining about an existing project, says someone promised to get back to them and did not, says an earlier message or enquiry was ignored or lost, or is clearly upset or frustrated with the studio. When in doubt, complaint=true: a human should hear about it.
-Extract fields only from the caller's own words, as short plain values with no commentary: scope is the rooms or work in at most 12 words (for example "kitchen, wardrobes, living room"); completion_date is a few words ("by March 2027"); decision_maker is a few words ("caller and spouse"); locality is just the area name. Leave a field out if the caller did not say it. summary: two plain sentences a designer can read in five seconds.
+Extract fields only from the caller's own words, as short plain values with no commentary: scope is the rooms or work in at most 12 words (for example "kitchen, wardrobes, living room"); completion_date is a few words ("by March 2027"); decision_maker is a few words ("caller and spouse"); locality is just the area name. Leave a field out if the caller did not say it. email: the caller's email address as written, lower case. Callers spell it aloud ("meera dot iyer at gmail dot com" means meera.iyer@gmail.com); convert it, and leave it out unless it is clearly a full address. preferred_time: the day and time the caller asked for, in a few words ("Tuesday afternoon"). preferred_start: ONLY if the caller named a specific day AND a time of day, that moment as an ISO 8601 timestamp with the +05:30 offset, resolved from today's date (for "Tuesday at 3pm" use the next Tuesday 15:00:00+05:30); otherwise leave it out. summary: two plain sentences a designer can read in five seconds.
 
 === services.md ===
 ${knowledge.services()}
 
 === qualified.md (the rubric, written by the founder) ===
 ${knowledge.qualified()}`;
+}
+
+/** Spoken or written, to a plain address; undefined when it is not clearly one. */
+export function cleanEmail(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const t = raw.toLowerCase().trim().replace(/\s+at\s+/g, '@').replace(/\s+dot\s+/g, '.').replace(/\s+/g, '');
+  return /^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(t) && t.length <= 100 ? t : undefined;
 }
 
 /** Gemini's free-text fields sometimes ramble. Designers read these in a Telegram note, so cap them in code. */
@@ -130,6 +140,9 @@ function tidyFields(f: Fields): Fields {
     completion_date: cap(f.completion_date, 40),
     decision_maker: cap(f.decision_maker, 40),
     budget_mentioned: cap(f.budget_mentioned, 40),
+    email: cleanEmail(f.email),
+    preferred_time: cap(f.preferred_time, 60),
+    preferred_start: f.preferred_start && !isNaN(Date.parse(f.preferred_start)) ? new Date(f.preferred_start).toISOString() : undefined,
   };
 }
 
@@ -197,6 +210,7 @@ function heuristic(input: TriageInput): TriageResult {
       : 'residential';
   const scopeWords = ['kitchen', 'wardrobe', 'living room', 'bedroom', 'dining', 'study', 'home office', 'flooring', 'whole', 'full home', 'complete redesign', 'workstation', 'cabin', 'meeting room'];
   fields.scope = scopeWords.filter((w) => lower.includes(w)).join(', ') || undefined;
+  fields.email = cleanEmail(text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/)?.[0] ?? lower.match(/\b([a-z0-9]+(?: dot [a-z0-9]+)*) at ([a-z0-9]+(?: dot [a-z0-9]+)* dot (?:com|in|org|net|co|io|co dot in))\b/)?.[0]);
   fields.budget_mentioned = text.match(/(?:₹|rs\.?\s?)?\d+(?:\.\d+)?\s*(?:to|-|–)?\s*(?:\d+(?:\.\d+)?)?\s*lakhs?[^.]*/i)?.[0]?.trim();
 
   /* 1 real project */
@@ -285,7 +299,7 @@ export async function triage(input: TriageInput): Promise<TriageResult> {
         const g = await gemini(input, 45_000);
         // Gemini sometimes omits facts the caller plainly stated. Fill gaps from the rule-based reading.
         const h = heuristic(input).fields;
-        for (const k of ['name', 'locality', 'area_sqft', 'project_type'] as const) {
+        for (const k of ['name', 'locality', 'area_sqft', 'project_type', 'email'] as const) {
           if (g.fields[k] == null || g.fields[k] === '') (g.fields as Record<string, unknown>)[k] = h[k];
         }
         return g;

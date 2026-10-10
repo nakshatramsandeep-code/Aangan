@@ -50,7 +50,7 @@ export function SystemStatusSkeleton() {
   return (
     <section className="card section-card" aria-busy="true" aria-label="Checking pipeline status">
       <div className="card-head"><div><h2 className="card-title">Pipeline status</h2><p className="card-sub">Checking every stage…</p></div></div>
-      <ol className="pipe">{Array.from({ length: 6 }).map((_, i) => <li key={i} className="pnode skel"><span className="pdot" /><b>&nbsp;</b><span className="prole">&nbsp;</span><p className="pdetail">&nbsp;</p></li>)}</ol>
+      <ol className="pipe">{Array.from({ length: 8 }).map((_, i) => <li key={i} className="pnode skel"><span className="pdot" /><b>&nbsp;</b><span className="prole">&nbsp;</span><p className="pdetail">&nbsp;</p></li>)}</ol>
     </section>
   );
 }

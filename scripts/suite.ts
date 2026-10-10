@@ -27,6 +27,7 @@ const DB = process.env.DATABASE_URL ?? '';
 const HUBSPOT = process.env.HUBSPOT_TOKEN ?? '';
 const STARTED = Date.now();
 const RUN = STARTED.toString(36);
+const ONLY = (process.argv[3] ?? '').split(',').map((x) => Number(x)).filter(Boolean);
 
 let pass = 0, fail = 0;
 const failures: string[] = [];
@@ -78,6 +79,7 @@ function convo(hh: number, mm: number, turns: ['A' | 'U', string][]) {
 }
 
 type Expect = {
+  email?: string; preferred?: boolean; hold?: boolean; noEmail?: boolean;
   route?: string; silent?: boolean; deal?: boolean; afterHours: boolean;
   name?: string; locality?: string; area?: number; type?: string;
   leak?: boolean; flagged?: boolean; urgent?: boolean;
@@ -95,8 +97,10 @@ const CALLS: Call[] = [
       ['U', 'Can you tell me roughly what it costs per square foot?'],
       ['A', 'Pricing depends on the site, the materials you choose, and the scope. Your designer will walk you through it in detail at the consultation.'],
       ['U', 'Okay, fair enough.'],
-      ['A', 'A designer will call you to arrange the free consultation.']]),
-    expect: { route: 'qualified', deal: true, afterHours: false, name: 'Priya', locality: 'Kothrud', area: 1400, type: 'residential', leak: false },
+      ['A', 'Which weekday and time suits you for the designer\'s call, and what is the best email for a confirmation?'],
+      ['U', 'Thursday at 3 pm works for me. My email is test dot priya dot nair at example dot com.'],
+      ['A', 'Thank you. The designer will confirm the time and a confirmation email will follow.']]),
+    expect: { route: 'qualified', deal: true, afterHours: false, name: 'Priya', locality: 'Kothrud', area: 1400, type: 'residential', leak: false, email: 'test.priya.nair@example.com', preferred: true, hold: true },
   },
   {
     n: 2, title: 'Qualified small office, called after hours', phone: '+919999900202', at: weekdayAt(22, 10), secs: 230,
@@ -105,7 +109,7 @@ const CALLS: Call[] = [
       ['A', 'Good scope for us. When do you need it operational?'],
       ['U', 'By January 20. I am the founder, so I decide.'],
       ['A', 'Wonderful. A designer will call you to arrange the free consultation.']]),
-    expect: { route: 'qualified', deal: true, afterHours: true, name: 'Vikram', locality: 'Hinjewadi', area: 1200, type: 'commercial', leak: false },
+    expect: { route: 'qualified', deal: true, afterHours: true, name: 'Vikram', locality: 'Hinjewadi', area: 1200, type: 'commercial', leak: false, hold: true, noEmail: true },
   },
   {
     n: 3, title: 'Qualified with a flag: son researching for his parents, in Hinglish', phone: '+919999900203', at: weekdayAt(14, 40), secs: 255,
@@ -114,7 +118,7 @@ const CALLS: Call[] = [
       ['A', 'Zaroor. Kya aap decision lene wale hain?'],
       ['U', 'Nahi, main sirf initial research kar raha hoon. Parents hi final decision lenge, wo phone use nahi karte.'],
       ['A', 'Theek hai. Ek designer aapko consultation arrange karne ke liye call karenge.']]),
-    expect: { route: 'qualified_flag', deal: true, afterHours: false, name: 'Rahul', locality: 'Hadapsar', flagged: true, leak: false },
+    expect: { route: 'qualified_flag', deal: true, afterHours: false, name: 'Rahul', locality: 'Hadapsar', flagged: true, leak: false, hold: true, noEmail: true },
   },
   {
     n: 4, title: 'Incomplete: wants a kitchen redo but hangs up before giving a timeline', phone: '+919999900204', at: weekdayAt(10, 45), secs: 95,
@@ -222,6 +226,28 @@ async function runCall(c: Call) {
   } else {
     t(!r.hubspot?.deal_id, 'No HubSpot deal (not qualified)');
   }
+  if (e.hold) {
+    t(!!r.consultation?.start && r.consultation.calendar === 'mock', 'Calendar hold made (mock: test callers never touch a real calendar)', r.consultation?.start);
+    if (r.consultation?.start) {
+      const when = new Date(r.consultation.start);
+      const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(when);
+      const wd = p.find((x) => x.type === 'weekday')?.value, hr = Number(p.find((x) => x.type === 'hour')?.value) % 24;
+      t(wd !== 'Sat' && wd !== 'Sun' && hr >= 10 && hr <= 18, 'Hold is on a working day inside office hours', `${wd} ${hr}:00`);
+      t(when.getTime() - Date.now() >= 17 * 3600e3, 'Hold respects the 18 h lead time');
+      if (e.preferred) t(r.consultation.source === 'preferred', 'The caller’s preferred time (Thursday 3 pm) was used', `${r.consultation.source}; preferred_time=${r.fields?.preferred_time}; preferred_start=${r.fields?.preferred_start}`);
+    }
+    t(!!r.hubspot?.meeting_id && !String(r.hubspot.meeting_id).startsWith('mock'), 'HubSpot: consultation logged as a meeting (real)', r.hubspot?.meeting_id ?? r.hubspot?.error);
+    if (r.hubspot?.meeting_id && HUBSPOT) {
+      const mr = await fetch(`https://api.hubapi.com/crm/v3/objects/meetings/${r.hubspot.meeting_id}?properties=hs_meeting_title&associations=deals`, { headers: { Authorization: `Bearer ${HUBSPOT}` } });
+      const md: any = mr.ok ? await mr.json() : null;
+      t(!!md && (md.associations?.deals?.results ?? []).some((x: any) => String(x.id) === String(r.hubspot.deal_id)), 'HubSpot: the meeting is attached to the deal', md ? md.properties.hs_meeting_title : `HTTP ${mr.status}`);
+    }
+  }
+  if (e.email) {
+    t(r.fields?.email === e.email, 'Email address extracted from the spoken words', r.fields?.email);
+    t(r.email?.sent === true && r.email.mock === true && r.email.to === e.email, 'Customer email recorded (mock: test callers never email a real address)', r.email?.error ?? r.email?.to);
+  }
+  if (e.noEmail) t(!r.email?.sent && !!r.email?.skipped, 'No email address given: skipped, not failed', r.email?.skipped);
   return { c, id, r, L };
 }
 
@@ -243,8 +269,16 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
   check(bad.status === 401, 'Webhook rejects a wrong secret', `HTTP ${bad.status}`);
 
   say('\nRunning the 10 calls (3 at a time)…');
-  const results = await pool(CALLS, 3, runCall);
+  const chosen = ONLY.length ? CALLS.filter((c) => ONLY.includes(c.n)) : CALLS;
+  const results = await pool(chosen, 3, runCall);
   for (const x of results) { say(`\n#${x.c.n}  ${x.c.title}   [${x.c.phone}]`); x.L.forEach((l) => say(`   ${l}`)); }
+
+  if (ONLY.length) {
+    say(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} checks passed, ${fail} failed (calls ${ONLY.join(', ')} only)`);
+    if (failures.length) { say('\nFailed checks:'); failures.forEach((f) => say(`  ✘ ${f}`)); }
+    fs.writeFileSync('suite-report.txt', out.join('\n'));
+    process.exit(fail === 0 ? 0 : 1);
+  }
 
   /* ---------- whole-dashboard checks ---------- */
   say('\nDashboard as a whole');

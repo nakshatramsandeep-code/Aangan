@@ -32,7 +32,7 @@ export async function createLead(call: CallRow): Promise<NonNullable<CallRow['hu
     const created = await hs('/crm/v3/objects/contacts', {
       method: 'POST',
       body: JSON.stringify({
-        properties: { firstname: first, lastname: rest.join(' '), ...(phone ? { phone } : {}), city: f.locality ?? '' },
+        properties: { firstname: first, lastname: rest.join(' '), ...(phone ? { phone } : {}), ...(f.email ? { email: f.email } : {}), city: f.locality ?? '' },
       }),
     });
     contactId = created.id;
@@ -44,7 +44,8 @@ export async function createLead(call: CallRow): Promise<NonNullable<CallRow['hu
     f.area_sqft && `Area: ${f.area_sqft} sq ft`,
     f.completion_date && `Timeline: ${f.completion_date}`,
     call.flags.length && `Flags: ${call.flags.join('; ')}`,
-    call.booking && `Consultation booked: ${call.booking.start}`,
+    call.consultation?.start && `Consultation call (tentative): ${new Date(call.consultation.start).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' })} IST`,
+    f.email && `Email: ${f.email}`,
     `Call log: ${config.appUrl}/calls/${call.id}`,
   ]
     .filter(Boolean)
@@ -63,4 +64,32 @@ export async function createLead(call: CallRow): Promise<NonNullable<CallRow['hu
   });
   await hs(`/crm/v4/objects/deals/${deal.id}/associations/default/contacts/${contactId}`, { method: 'PUT' });
   return { contact_id: contactId, deal_id: deal.id, mock: false };
+}
+
+/**
+ * Logs the tentative consultation as a meeting on the deal and contact, so HubSpot's timeline shows it.
+ * (Creating a meeting through the API records it in HubSpot; the Google Calendar event is made separately.)
+ */
+export async function logMeeting(call: CallRow): Promise<string> {
+  const c = call.consultation;
+  if (!c?.start || !c.end) throw new Error('No consultation time to log');
+  if (!config.hubspot.token || call.hubspot?.mock) return `mock-meeting-${call.id}`;
+  const f = call.fields ?? {};
+  const m = await hs('/crm/v3/objects/meetings', {
+    method: 'POST',
+    body: JSON.stringify({
+      properties: {
+        hs_timestamp: c.start,
+        hs_meeting_title: `Consultation call (tentative) · ${f.name ?? 'New lead'}`,
+        hs_meeting_body: `Tentative hold${c.link ? `: ${c.link}` : ''}\nCall log: ${config.appUrl}/calls/${call.id}`,
+        hs_meeting_start_time: c.start,
+        hs_meeting_end_time: c.end,
+        hs_meeting_outcome: 'SCHEDULED',
+      },
+    }),
+  });
+  const deal = call.hubspot?.deal_id, contact = call.hubspot?.contact_id;
+  if (deal) await hs(`/crm/v4/objects/meetings/${m.id}/associations/default/deals/${deal}`, { method: 'PUT' });
+  if (contact) await hs(`/crm/v4/objects/meetings/${m.id}/associations/default/contacts/${contact}`, { method: 'PUT' });
+  return String(m.id);
 }

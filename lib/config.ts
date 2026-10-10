@@ -18,6 +18,22 @@ export const config = {
     dealStage: process.env.HUBSPOT_DEAL_STAGE || 'appointmentscheduled',
     pipeline: process.env.HUBSPOT_PIPELINE || 'default',
   },
+  google: {
+    /** Service-account JSON (raw or base64). The designer's calendar must be shared with its email. */
+    serviceAccount: process.env.GOOGLE_SERVICE_ACCOUNT_JSON || '',
+    calendarId: process.env.GOOGLE_CALENDAR_ID || '',
+  },
+  consult: {
+    minutes: num(process.env.CONSULT_MINUTES, 60),
+    /** Earliest a hold may start, counted from the call. Gives the designer time to react. */
+    leadHours: num(process.env.CONSULT_LEAD_HOURS, 18),
+  },
+  resend: {
+    key: process.env.RESEND_API_KEY || '',
+    /** Must be on a domain verified in Resend. onboarding@resend.dev only delivers to the account owner. */
+    from: process.env.RESEND_FROM || 'Aangan Studio <onboarding@resend.dev>',
+    replyTo: process.env.RESEND_REPLY_TO || '',
+  },
   telegram: {
     token: process.env.TELEGRAM_BOT_TOKEN || '',
     chatId: process.env.TELEGRAM_CHAT_ID || '',
@@ -42,6 +58,8 @@ export const integrationStatus = () => ({
   neon: !!config.databaseUrl,
   gemini: !!config.gemini.key,
   hubspot: !!config.hubspot.token,
+  calendar: !!(config.google.serviceAccount && config.google.calendarId),
+  email: !!config.resend.key,
   telegram: !!(config.telegram.token && config.telegram.chatId),
   vaaniSecret: !!config.webhookSecret,
 });
