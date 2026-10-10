@@ -122,6 +122,49 @@ export function cleanEmail(raw?: string): string | undefined {
   return /^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(t) && t.length <= 100 ? t : undefined;
 }
 
+
+const WEEKDAYS: [RegExp, number][] = [
+  [/\b(sun(day)?)\b/, 0], [/\b(mon(day)?)\b/, 1], [/\b(tue(s|sday)?)\b/, 2], [/\b(wed(nesday)?)\b/, 3],
+  [/\b(thu(r|rs|rsday)?)\b/, 4], [/\b(fri(day)?)\b/, 5], [/\b(sat(urday)?)\b/, 6],
+];
+
+/**
+ * "Thursday at 3 pm", "tomorrow morning", "Monday 11" -> the next such moment after `asOf`, in IST.
+ * Needs both a day and a time of day; otherwise null. Gemini does this too; this keeps it deterministic
+ * when Gemini leaves it out. The scheduler still checks office hours and the calendar.
+ */
+export function parsePreferred(text: string, asOf: Date): { preferred_time: string; preferred_start?: string } | null {
+  const t = text.toLowerCase().replace(/[’‘]/g, "'");
+  const IST = 5.5 * 3600e3;
+  const today = new Date(asOf.getTime() + IST);
+  let offset: number | null = null;
+  let dayWord = '';
+  if (/\btomorrow\b/.test(t)) { offset = 1; dayWord = 'tomorrow'; }
+  else for (const [re, wd] of WEEKDAYS) {
+    const m = t.match(re);
+    if (m) { offset = ((wd - today.getUTCDay() + 7) % 7) || 7; dayWord = m[0]; break; }
+  }
+  if (offset === null) return null;
+
+  let hour: number | null = null, minute = 0, timeWord = '';
+  const clock = t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/);
+  const bare = t.match(/\b(?:at|around|by)\s+(\d{1,2})(?::(\d{2}))?(?!\s*(?:sq|bhk|lakh|k\b|\d))/);
+  if (clock) {
+    hour = Number(clock[1]) % 12 + (clock[3].startsWith('p') ? 12 : 0); minute = Number(clock[2] ?? 0); timeWord = clock[0];
+  } else if (bare) {
+    const h = Number(bare[1]); hour = h >= 1 && h <= 6 ? h + 12 : h; minute = Number(bare[2] ?? 0); timeWord = bare[0];
+  } else if (/\bnoon\b/.test(t)) { hour = 12; timeWord = 'noon'; }
+  else if (/\bafternoon\b/.test(t)) { hour = 15; timeWord = 'afternoon'; }
+  else if (/\bmorning\b/.test(t)) { hour = 11; timeWord = 'morning'; }
+  else if (/\bevening\b/.test(t)) { timeWord = 'evening'; }
+  if (!timeWord) return null;
+
+  const label = `${dayWord} ${timeWord}`.replace(/\s+/g, ' ').trim();
+  if (hour === null || hour > 23 || minute > 59) return { preferred_time: label };
+  const y = today.getUTCFullYear(), mo = today.getUTCMonth(), d = today.getUTCDate() + offset;
+  return { preferred_time: label, preferred_start: new Date(Date.UTC(y, mo, d, hour, minute) - IST).toISOString() };
+}
+
 /** Gemini's free-text fields sometimes ramble. Designers read these in a Telegram note, so cap them in code. */
 function tidyFields(f: Fields): Fields {
   const cap = (v: string | undefined, max: number) => {
@@ -211,6 +254,7 @@ function heuristic(input: TriageInput): TriageResult {
   const scopeWords = ['kitchen', 'wardrobe', 'living room', 'bedroom', 'dining', 'study', 'home office', 'flooring', 'whole', 'full home', 'complete redesign', 'workstation', 'cabin', 'meeting room'];
   fields.scope = scopeWords.filter((w) => lower.includes(w)).join(', ') || undefined;
   fields.email = cleanEmail(text.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/)?.[0] ?? lower.match(/\b([a-z0-9]+(?: dot [a-z0-9]+)*) at ([a-z0-9]+(?: dot [a-z0-9]+)* dot (?:com|in|org|net|co|io|co dot in))\b/)?.[0]);
+  Object.assign(fields, parsePreferred(text, input.asOf ?? new Date()) ?? {});
   fields.budget_mentioned = text.match(/(?:₹|rs\.?\s?)?\d+(?:\.\d+)?\s*(?:to|-|–)?\s*(?:\d+(?:\.\d+)?)?\s*lakhs?[^.]*/i)?.[0]?.trim();
 
   /* 1 real project */
@@ -299,7 +343,7 @@ export async function triage(input: TriageInput): Promise<TriageResult> {
         const g = await gemini(input, 45_000);
         // Gemini sometimes omits facts the caller plainly stated. Fill gaps from the rule-based reading.
         const h = heuristic(input).fields;
-        for (const k of ['name', 'locality', 'area_sqft', 'project_type', 'email'] as const) {
+        for (const k of ['name', 'locality', 'area_sqft', 'project_type', 'email', 'preferred_time', 'preferred_start'] as const) {
           if (g.fields[k] == null || g.fields[k] === '') (g.fields as Record<string, unknown>)[k] = h[k];
         }
         return g;

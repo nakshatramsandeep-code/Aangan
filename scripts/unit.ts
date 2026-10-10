@@ -81,6 +81,23 @@ const IST = (iso: string) => new Date(`${iso}+05:30`);
   const hh = await triage({ transcript: 'Caller: Hi, I am Meera. My email is meera dot iyer at gmail dot com, 3BHK in Baner, by March.' });
   ok(hh.fields.email === 'meera.iyer@gmail.com', 'The fallback reader finds a spoken email in a transcript', String(hh.fields.email));
 
+  group('Reading a preferred day and time');
+  const { parsePreferred } = await import('../lib/triage');
+  const FRI = IST('2026-10-09T11:20:00'); // a Friday
+  const p1 = parsePreferred('Thursday at 3 pm works for me', FRI);
+  ok(p1?.preferred_start === IST('2026-10-15T15:00:00').toISOString(), '“Thursday at 3 pm” on a Friday is the following Thursday 15:00', p1?.preferred_start);
+  const p2 = parsePreferred('tomorrow morning would be good', FRI);
+  ok(p2?.preferred_start === IST('2026-10-10T11:00:00').toISOString(), '“tomorrow morning” is 11:00 the next day', p2?.preferred_start);
+  const p3 = parsePreferred('How about Monday at 11:30 am?', FRI);
+  ok(p3?.preferred_start === IST('2026-10-12T11:30:00').toISOString(), '“Monday at 11:30 am”', p3?.preferred_start);
+  ok(parsePreferred('Tuesday around 4', FRI)?.preferred_start === IST('2026-10-13T16:00:00').toISOString(), 'A bare “4” in office hours means 4 pm');
+  ok(parsePreferred('Friday afternoon', FRI)?.preferred_start === IST('2026-10-16T15:00:00').toISOString(), 'Saying the weekday it already is means next week');
+  ok(parsePreferred('whenever is fine', FRI) === null, 'No day and time: nothing');
+  ok(parsePreferred('Thursday works', FRI) === null, 'A day without a time of day: nothing');
+  const p4 = parsePreferred('Thursday evening', FRI);
+  ok(p4?.preferred_time === 'thursday evening' && !p4.preferred_start, 'An evening is noted but not turned into a time');
+  ok(parsePreferred('I have a 3BHK of 1,200 sq ft, done by March', FRI) === null, 'Sizes and months are not mistaken for a time');
+
   group('The customer email');
   const base: any = { id: 'x1', created_at: new Date().toISOString(), status: 'ended', route: 'qualified', flags: [], after_hours: false, fields: { name: 'Meera Iyer', email: 'meera@example.com', locality: 'Baner', area_sqft: 1200, project_type: 'residential', scope: 'kitchen, wardrobes', completion_date: 'by March' } };
   let m = buildEmail({ ...base, consultation: { calendar: 'google', start: IST('2026-10-13T11:00:00').toISOString(), end: IST('2026-10-13T12:00:00').toISOString() } });

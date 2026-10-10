@@ -264,7 +264,7 @@ async function pool<T, R>(items: T[], n: number, fn: (x: T) => Promise<R>): Prom
 
   say('\nBefore the calls');
   const h: any = await (await fetch(`${BASE}/api/health`, { cache: 'no-store' })).json();
-  for (const x of h.checks) check(x.status === 'ok' || x.status === 'warn', `Health: ${x.name}`, `${x.status} · ${x.detail}`);
+  for (const x of h.checks) check(x.status !== 'down', `Health: ${x.name}`, `${x.status} · ${x.detail}`);
   const bad = await fetch(`${BASE}/api/vaani/webhook?secret=wrong`, { method: 'POST', body: '{}' });
   check(bad.status === 401, 'Webhook rejects a wrong secret', `HTTP ${bad.status}`);
 

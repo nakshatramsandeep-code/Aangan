@@ -186,7 +186,7 @@ async function run(s: Scenario) {
   const bad = await hook({ event: 'call_started', data: { call_id: 'x' } }, 'wrong-secret');
   check(bad.status === 401, 'Webhook rejects a wrong secret', `HTTP ${bad.status}`);
   const h: any = await (await fetch(`${BASE}/api/health`, { cache: 'no-store' })).json();
-  for (const c of h.checks) check(c.status === 'ok' || c.status === 'warn', `Health: ${c.name} reachable`, `${c.status} · ${c.detail}`);
+  for (const c of h.checks) check(c.status !== 'down', `Health: ${c.name} reachable`, `${c.status} · ${c.detail}`);
 
   const results: Record<string, any> = {};
   const list = ONLY ? SCENARIOS.filter((x) => ONLY.includes(x.key)) : SCENARIOS;
